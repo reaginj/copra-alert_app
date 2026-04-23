@@ -1,0 +1,68 @@
+import {Text, View, StyleSheet} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+export default function ProductCard() {
+    return (
+        <View style={styles.container}>
+            <View style={styles.row}>
+                <View style={[styles.card, { borderColor: '#706a33', borderWidth: 1 }]}>
+                    <Text style={styles.weight_title}> OUTPUT</Text>
+                    <Text style={styles.weight}> 240kg</Text>
+                </View>
+                <View style={[styles.card, { backgroundColor: '#275844' }]}>
+                    <Text style={styles.price_title}> PRESYO </Text>
+                    <Text style={styles.price}> ₱60.50 </Text>
+                </View>
+            </View>
+        </View>
+        
+    );
+}
+
+const styles = StyleSheet.create({
+    container: {
+        borderRadius: 13,
+        padding: 10,
+        marginBottom: 10,
+        marginTop: 13,
+    },
+    row: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+    },
+    output: {
+        backgroundColor: '#f7f3d1',
+        borderRadius: 8,
+        padding: 10,
+    },
+    weight: {
+        fontSize: 40,
+        fontWeight: 'bold',
+        color: '#4A3728',
+    },
+    card: {
+        backgroundColor: '#f8f8f7',
+        borderRadius: 8,
+        padding: 10,
+        width: '48%',
+    },
+    price: {
+        fontSize: 40,
+        fontWeight: 'bold',
+        color: '#f8e7e3',
+    },
+    price_title: {
+        fontSize: 17,
+        color: '#f8e7e3',
+        marginBottom: 3,
+        fontWeight: '600',
+        opacity: 0.7,
+    },
+    weight_title: {
+        fontSize: 17,
+        color: '#5c5652',
+        marginBottom: 3,        
+        fontWeight: '600',
+        opacity: 0.7,
+    },
+});
