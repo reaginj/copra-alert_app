@@ -1,5 +1,6 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Text, View, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function AlertCard() {
   const alerts = [
@@ -22,7 +23,7 @@ export default function AlertCard() {
       {alerts.map((alert) => (
         <View
           key={alert.id}
-          style={[styles.alertBox, { borderLeftColor: alert.color }]}
+          style={[styles.alertBox, { borderLeftColor: alert.color, borderBottomColor: alert.color, borderTopColor: alert.color, borderRightColor: alert.color }]}
         >
           <View style={styles.row}>
             <MaterialIcons name="warning" size={24} color={alert.color} />
@@ -40,7 +41,7 @@ export default function AlertCard() {
 
 const styles = StyleSheet.create({
   container: {
-    marginTop: 10,
+    marginTop: 3,
     gap: 10,
   },
   alertBox: {
@@ -48,6 +49,9 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 14,
     borderLeftWidth: 5,
+    borderRightWidth: 1,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
   },
   row: {
     flexDirection: 'row',

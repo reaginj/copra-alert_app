@@ -2,16 +2,22 @@ import {Text, View, StyleSheet} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function ProductCard() {
+
+    const testData = {
+        weight: "220kg",
+        price: "₱45.50"
+    }
+
     return (
         <View style={styles.container}>
             <View style={styles.row}>
-                <View style={[styles.card, { borderColor: '#706a33', borderWidth: 1 }]}>
-                    <Text style={styles.weight_title}> OUTPUT</Text>
-                    <Text style={styles.weight}> 240kg</Text>
+                <View style={[styles.card, { borderColor: '#134227', borderWidth: 1 }]}>
+                    <Text style={styles.weight_title}> WEIGHT</Text>
+                    <Text style={styles.weight}> {testData.weight}</Text>
                 </View>
                 <View style={[styles.card, { backgroundColor: '#275844' }]}>
                     <Text style={styles.price_title}> PRESYO </Text>
-                    <Text style={styles.price}> ₱60.50 </Text>
+                    <Text style={styles.price} adjustsFontSizeToFit numberOfLines={1}> {testData.price} </Text>
                 </View>
             </View>
         </View>
