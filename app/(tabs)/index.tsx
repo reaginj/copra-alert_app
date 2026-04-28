@@ -11,8 +11,7 @@ export default function HomeScreen() {
       <SafeAreaView edges={['top']} style={styles.topSafeArea}>
         <View style={styles.header}>
           <Text style={styles.title}>Copra-Alert</Text>
-          <View style={{ height: 1, width: '70%', backgroundColor: '#F6F1B9', marginVertical: 8, alignSelf: 'center', opacity: 0.5 }} />
-          <Text style={styles.subtitle}> Monitoring and Supply Chain System</Text>
+          <Text style={styles.subtitle}>Monitoring and Supply Chain System</Text>
         </View>
       </SafeAreaView>
 
@@ -46,7 +45,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '700',
     color: '#FFFFFF',
-    textAlign: 'center',
+    textAlign: 'left',
   },
   title_card: {
     fontSize: 19,
@@ -58,7 +57,8 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 14,
     color: '#F6F1B9',
-    textAlign: 'center',
+    textAlign: 'left',
+    paddingTop: 5,
   },
   content: {
     flex: 1,
