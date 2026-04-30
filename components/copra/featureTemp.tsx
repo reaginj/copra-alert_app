@@ -1,13 +1,9 @@
 import { StyleSheet, Text, View } from "react-native";  
-import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from 'expo-linear-gradient';
+import { useCopra } from "./copraContext";
 
 export default function FeatureTemp() {
-  const testData = {
-    temp: 80,
-    hrs: "4hr 20min",
-    status: "Alert",
-  };
+  const {temp, hrs} = useCopra();
 
   const getStatus = (temp: number) => {
   if (temp < 40) {
@@ -30,7 +26,7 @@ export default function FeatureTemp() {
 };
 
 const maxTemp = 100;
-const progress = Math.min(testData.temp / maxTemp, 1);
+const progress = Math.min(temp / maxTemp, 1);
 const progressWidth = `${progress * 100}%` as `${number}%`;
 
 
@@ -40,13 +36,13 @@ const progressWidth = `${progress * 100}%` as `${number}%`;
 
       <View style={styles.tempRow}>
         <Text style={styles.temp}>
-          {testData.temp}
+          {temp}
           <Text style={styles.degree}> °C</Text>
         </Text>
 
-        <View style={[styles.statusCont, { backgroundColor: getStatus(testData.temp).bgcolor }]}>
-            <View style={[styles.dot, { backgroundColor: getStatus(testData.temp).dotColor }]} />
-            <Text style={styles.statusText}>{getStatus(testData.temp).label}</Text>
+        <View style={[styles.statusCont, { backgroundColor: getStatus(temp).bgcolor }]}>
+            <View style={[styles.dot, { backgroundColor: getStatus(temp).dotColor }]} />
+            <Text style={styles.statusText}>{getStatus(temp).label}</Text>
         </View>
       </View>
 
@@ -74,7 +70,7 @@ const progressWidth = `${progress * 100}%` as `${number}%`;
       />
 
       <Text style={styles.hrs}>ORAS NA NAKASALANG
-        <Text style={styles.time}>        {testData.hrs}</Text>
+        <Text style={styles.time}>        {hrs}</Text>
       </Text>
       
     </View>
@@ -119,7 +115,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         marginTop: 25,
-        marginRight: 10,
+        marginRight: 1,
         paddingHorizontal: 10,
         paddingVertical: 5,
         borderRadius: 20,

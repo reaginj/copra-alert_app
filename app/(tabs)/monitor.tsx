@@ -1,10 +1,11 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Image } from 'react-native';
 import CamShot from '@/components/copra/camShot';
 import MonitorTemp from '@/components/copra/monitorTemp';
+import MonitorDetails from '@/components/copra/monitorDetail';
 
 export default function MonitorScreen() {
+
   return (
     <View style={styles.screen}>
       <SafeAreaView edges={['top']} style={styles.topSafeArea}>
@@ -17,6 +18,7 @@ export default function MonitorScreen() {
       <View style={styles.content}>
         <CamShot />
         <MonitorTemp />
+        <MonitorDetails />
       </View>
     </View>
   );

@@ -14,7 +14,7 @@ export default function AlertCard() {
       id: 2,
       title: 'Babala: Tumataas ang Init',
       detail: 'Bantayan ang apoy',
-      color: '#F0AD4E',
+      color: '#F0A33A',
     },
   ];
 

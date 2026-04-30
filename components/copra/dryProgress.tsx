@@ -20,7 +20,7 @@ const progressWidth = `${progress * 100}%` as `${number}%`;
             <View style={styles.progressBarBg}>
                <View style={[styles.progressBarFill, {
                  width: progressWidth,
-                backgroundColor: '#b88d6a',
+                backgroundColor: '#C89B6D',
                 }]} 
                
                />
