@@ -1,88 +1,141 @@
 import { Text, View, StyleSheet } from 'react-native';
 import { useCopra } from './copraContext';
+import { Ionicons } from '@expo/vector-icons';
+import * as Progress from 'react-native-progress';
 
 export default function MonitorDetails() {
 
   const { hrs, start, timeLeft } = useCopra();   
+  const totalTime = 30; 
+const remaining = parseFloat(timeLeft); 
+const progress = (totalTime - remaining) / totalTime;
+
 
   return (
-    <View style={styles.container}>
 
-      <View style={styles.row}>
-        <View style={styles.item}>
-          <Text style={styles.label}>NAGSIMULA</Text>
-          <Text style={styles.value}>{start}</Text>
+      <View style={styles.container}>
+        <View style={styles.card}>
+        <Text style={styles.cardTitle}>DRYING STATUS</Text>
+          <View style={styles.row}>
+            <Ionicons name="time-outline" size={50} color="#134227" />
+              <View style={styles.item}>
+                <Text style={styles.label}>Oras na Nakasalang</Text>
+                <Text style={styles.hrsOn}>{hrs}</Text>
+              </View>
+
+              <Text style={styles.separator}>•</Text>
+
+              <View style={styles.item}>
+                <Text style={styles.label}>Simula</Text>
+                <Text style={styles.hrsOn}>{start}</Text>
+              </View>
+              
+          </View>
         </View>
 
-        <View style={styles.item}>
-          <Text style={styles.label}>TAGAL NG SALANG</Text>
-          <Text style={styles.value}>{hrs}</Text>
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>TANTYANG TAPOS</Text>
+
+          <View style={styles.rowBetween}>
+            <View style={styles.item1}>
+              <Text style={styles.estimate}>{timeLeft}</Text>
+              <Text style={styles.subtitle}>Tinatantya: 4:00PM</Text>
+            </View>
+
+            <Progress.Circle
+              size={80}
+              progress={progress} 
+              showsText
+              color="#134227"
+              thickness={8}
+              borderWidth={0}
+            />
+          </View>
+
+
+
         </View>
       </View>
 
-      <View style={styles.divider} />
+  
 
-      <View style={styles.bottom}>
-        <Text style={styles.label}>TANTYANG TAPOS</Text>
-        <Text style={styles.timeLeft}>{timeLeft}</Text>
-      </View>
-
-    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#ffffff',
-    borderRadius: 18,
-    padding: 18,
-    marginBottom: 12,
-    borderTopWidth: 6,
-    borderWidth: 1,
-    borderColor: '#C7B79B',
-    borderTopColor: '#C7B79B',
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
+  backgroundColor: 'transparent',
+  marginBottom: 12,
+},
 
   row: {
     flexDirection: 'row',
-  },
-
-  item: {
-    flex: 1,
     alignItems: 'center',
-  },
+},
 
-  label: {
-    fontSize: 13,
-    color: '#4A3728',
-    opacity: 0.7,
-    marginBottom: 4,
-  },
+item: {
+  marginLeft: 12,
+},
+item1: {
+  
+},
 
-  value: {
-    fontSize: 22,
-    fontWeight: '600',
-    color: '#4A3728',
-  },
+label: {
+  fontSize: 14,
+  color: '#8A7A6C',
+},
 
-  divider: {
-    height: 1,
-    backgroundColor: '#E8DED1',
-    marginVertical: 14,
-  },
+hrsOn: {
+  fontSize: 22,
+  fontWeight: '600',
+  color: '#4A3728',
+  marginTop: 2,
+},
 
-  bottom: {
-    alignItems: 'center',
-  },
+cardTitle: {
+  fontSize: 17,
+  color: '#4A3728',
+  marginBottom: 8,
+  fontWeight: '600',
+  opacity: 0.9
+},
 
-  timeLeft: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#3E6B4D',
+separator: {
+    marginHorizontal: 16,
+    fontSize: 14,
+    color: '#B0A89F',
   },
+ 
+  card: {
+  backgroundColor: '#FBF7F1',
+  borderRadius: 18,
+  padding: 18,
+  marginBottom: 10, 
+  marginTop: 5,
+
+  shadowColor: '#000',
+  shadowOpacity: 0.05,
+  shadowRadius: 6,
+  shadowOffset: { width: 0, height: 2 },
+  elevation: 2,
+},
+
+estimate: {
+  fontSize: 35,
+  fontWeight: '500',
+  color: '#2F5D3A',
+
+},
+
+subtitle: {
+  fontSize: 15,
+  marginTop: 1,
+  opacity: 0.6
+},
+
+rowBetween: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+},
 });

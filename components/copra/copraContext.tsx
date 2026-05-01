@@ -12,11 +12,11 @@ type CopraContextType = {
 const CopraContext = createContext<CopraContextType | undefined>(undefined);
 
 export const CopraProvider = ({ children }: { children: ReactNode }) => {
-const temp = 90;
+const temp = 70;
 const lastUpdate = '2 mins ago';
 const hrs = '3hr 20min';
 const start = '10:00 AM';
-const timeLeft = '1hr 40min';
+const timeLeft = '1hr 10min';
 
   return (
     <CopraContext.Provider value={{ temp, lastUpdate, hrs, start, timeLeft }}>

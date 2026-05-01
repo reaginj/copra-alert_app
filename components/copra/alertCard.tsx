@@ -6,13 +6,13 @@ export default function AlertCard() {
   const alerts = [
     {
       id: 1,
-      title: 'Delikado: Sobrang Init',
+      title: 'Sobrang Init',
       detail: 'Pahinaan ang apoy',
       color: '#D9534F',
     },
     {
       id: 2,
-      title: 'Babala: Tumataas ang Init',
+      title: 'Tumataas ang Init',
       detail: 'Bantayan ang apoy',
       color: '#F0A33A',
     },
