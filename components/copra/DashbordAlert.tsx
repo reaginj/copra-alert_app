@@ -2,7 +2,7 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Text, View, StyleSheet } from 'react-native';
 
 
-export default function AlertCard() {
+export default function DashboardAlertCard() {
   const alerts = [
     {
       id: 1,

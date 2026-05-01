@@ -3,6 +3,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import CamShot from '@/components/copra/camShot';
 import MonitorTemp from '@/components/copra/monitorTemp';
 import MonitorDetails from '@/components/copra/monitorDetail';
+import LiveMonitorCard from '@/components/copra/LiveMonitorCard';
 
 export default function MonitorScreen() {
 
@@ -16,8 +17,7 @@ export default function MonitorScreen() {
       </SafeAreaView>
 
       <View style={styles.content}>
-        <CamShot />
-        <MonitorTemp />
+        <LiveMonitorCard />
         <MonitorDetails />
       </View>
     </View>
@@ -47,7 +47,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#F6F1B9',
     textAlign: 'left',
-    paddingTop: 5,
+    paddingTop: 3
   },
   content: {
     flex: 1,

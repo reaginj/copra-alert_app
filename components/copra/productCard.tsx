@@ -11,7 +11,7 @@ export default function ProductCard() {
     return (
         <View style={styles.container}>
             <View style={styles.row}>
-                <View style={[styles.card, { borderColor: '#134227', borderWidth: 1 }]}>
+                <View style={styles.card}>
                     <Text style={styles.weight_title}> WEIGHT</Text>
                     <Text style={styles.weight}> {testData.weight}</Text>
                 </View>
@@ -51,6 +51,12 @@ const styles = StyleSheet.create({
         borderRadius: 8,
         padding: 10,
         width: '48%',
+
+        shadowColor: '#000',
+        shadowOpacity: 0.05,
+        shadowRadius: 6,
+        shadowOffset: { width: 0, height: 2 },
+        elevation: 2,
     },
     price: {
         fontSize: 40,

@@ -34,9 +34,13 @@ const styles = StyleSheet.create({
         borderRadius: 13,
         padding: 13,
         backgroundColor: '#ffffff',
-        borderColor: '#134227',
-        borderWidth: 1,
         marginBottom: 10,
+
+        shadowColor: '#000',
+        shadowOpacity: 0.05,
+        shadowRadius: 6,
+        shadowOffset: { width: 0, height: 2 },
+        elevation: 2,
     },
     cardTitle: {
         fontSize: 17,

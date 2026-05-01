@@ -1,7 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import FeatureTemp from '@/components/copra/featureTemp';
-import AlertCard from '@/components/copra/alertCard';
+import DashboardAlertCard from '@/components/copra/DashbordAlert';
 import ProductCard from '@/components/copra/productCard';
 import DryProgress from '@/components/copra/dryProgress';
 
@@ -18,7 +18,7 @@ export default function HomeScreen() {
       <View style={styles.content}>
         <FeatureTemp />
         <Text style={styles.title_card}> MGA ALERTO</Text>
-        <AlertCard />
+        <DashboardAlertCard />
         <ProductCard />
         <DryProgress/>
       </View>
@@ -58,7 +58,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#F6F1B9',
     textAlign: 'left',
-    paddingTop: 5,
+    paddingTop: 3,
   },
   content: {
     flex: 1,
