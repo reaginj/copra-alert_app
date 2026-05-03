@@ -93,7 +93,7 @@ const styles = StyleSheet.create({
     temp: {
         fontSize: 70,
         fontWeight: '700',
-        color: '#f8e7e3',
+        color: '#ffffff',
     },
     hrs: {
         fontSize: 17,

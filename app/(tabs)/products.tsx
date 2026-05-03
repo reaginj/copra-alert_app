@@ -4,18 +4,17 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 export default function HomeScreen() {
   return (
     <View style={styles.screen}>
-      <SafeAreaView edges={['top']} style={styles.topSafeArea}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Copra-Alert</Text>
-          <View style={{ height: 1, width: '70%', backgroundColor: '#F6F1B9', marginVertical: 8, alignSelf: 'center', opacity: 0.5 }} />
-          <Text style={styles.subtitle}> Monitoring and Supply Chain System</Text>
-        </View>
-      </SafeAreaView>
+          <SafeAreaView edges={['top']} style={styles.topSafeArea}>
+            <View style={styles.header}>
+              <Text style={styles.title}>Products</Text>
+              <Text style={styles.subtitle}>Production Output and Summary </Text>
+            </View>
+          </SafeAreaView>
+    
+          <View style={styles.content}>
 
-      <View style={styles.content}>
-        <Text>Screen content here</Text>
-      </View>
-    </View>
+          </View>
+        </View>
   );
 }
 
@@ -36,12 +35,13 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '700',
     color: '#FFFFFF',
-    textAlign: 'center',
+
   },
   subtitle: {
     fontSize: 14,
     color: '#F6F1B9',
-    textAlign: 'center',
+    paddingTop: 3
+
   },
   content: {
     flex: 1,
