@@ -1,19 +1,18 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Header from '@/components/copra/Header';
 
 export default function HomeScreen() {
   return (
     <View style={styles.screen}>
       <SafeAreaView edges={['top']} style={styles.topSafeArea}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Copra-Alert</Text>
-          <View style={{ height: 1, width: '70%', backgroundColor: '#F6F1B9', marginVertical: 8, alignSelf: 'center', opacity: 0.5 }} />
-          <Text style={styles.subtitle}> Monitoring and Supply Chain System</Text>
-        </View>
+        <Header
+          title="Supply Chain"
+
+        />
       </SafeAreaView>
 
       <View style={styles.content}>
-        <Text>Screen content here</Text>
       </View>
     </View>
   );

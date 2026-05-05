@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Header from '@/components/copra/Header';
 import AlertItem from '@/components/copra/AlertItem';
 
 
@@ -40,7 +41,7 @@ export default function Alerts() {
       message: 'Pahinaan ang apoy',
       temp: '85°C',
       time: '2 mins ago',
-      status: 'active',
+      status: 'recent',
     },
     {
       type: 'Babala',
@@ -80,7 +81,7 @@ export default function Alerts() {
       message: 'Sobrang taas ng init, posibleng masunog ang copra',
       temp: '92°C',
       time: '2 mins ago',
-      status: 'active'
+      status: 'recent'
     },
     {
       type: 'Delikado',
@@ -88,7 +89,7 @@ export default function Alerts() {
       message: 'Patuloy ang pagtaas ng temperatura',
       temp: '88°C',
       time: '10 mins ago',
-      status: 'recent'
+      status: 'active'
     },
     
     
@@ -124,10 +125,10 @@ export default function Alerts() {
   return (
     <View style={styles.screen}>
       <SafeAreaView edges={['top']} style={styles.topSafeArea}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Alerts</Text>
-          <Text style={styles.subtitle}>Live updates and warnings</Text>
-        </View>
+        <Header
+            title="Alerts"
+            subtitle= "Live updates and warnings"
+        />
       </SafeAreaView>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -176,9 +177,13 @@ export default function Alerts() {
           </View>
 
           <TouchableOpacity
-            style={styles.ackButton}
-            onPress={handleAcknowledge}
-          >
+              style={[
+                styles.ackButton,
+                buzzerStatus === 'available' && { opacity: 0.5 }
+              ]}
+              onPress={handleAcknowledge}
+              disabled={buzzerStatus === 'available'}
+            >
             <Text style={styles.ackText}>
               {buzzerStatus === 'ack' ? 'Done' : 'Acknowledge'}
             </Text>
