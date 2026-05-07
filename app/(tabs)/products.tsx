@@ -28,7 +28,7 @@ export default function Product() {
                 <View style={styles.textContainer}>
                   <Text style={styles.label}>Kasalukuyang Timbang</Text>
                   <Text style={styles.weight}>240 kg</Text>
-                  <Text style={styles.sub}>---</Text>
+                  <Text style={styles.sub}>Huling Update: 9:30 AM</Text>
                 </View>
               
               </View>
@@ -37,6 +37,61 @@ export default function Product() {
             <View style= {styles.card}>
               <Text style= {styles.cardTitle}>Output Computation</Text>
 
+                <View style= {styles.row}>
+
+                <View style={styles.Box}>
+                  <View style={styles.textContainer_output}>
+                  <Text style={styles.label_output}>Total Output</Text>
+                  <Text style={styles.weight_output}>240 kg</Text>
+
+                </View>
+                </View>
+
+                <View style={styles.Box}>
+                  <View style={styles.textContainer_output}>
+                  <Text style={styles.label_output}>Estimated Value</Text>
+                  <Text style={styles.weight_output}>₱240.00</Text>
+
+                </View>
+                </View>
+              
+              </View>
+
+            </View>
+
+             <View style= {styles.card}>
+              <Text style= {styles.cardTitle}>Batch Recording</Text>
+
+                <View style= {styles.row}>
+
+
+                  <View style={styles.textContainer_output}>
+                  <Text style={styles.batch_id}>Batch ID</Text>
+                  <Text style={styles.batch_num}>COP-001</Text>
+                  <Text style={styles.date}>Started: May 23, 26 10:00</Text>
+                  <Text style={styles.status}>Status: Ongoing </Text>
+                </View>
+
+              
+              </View>
+
+            </View>
+
+             <View style= {styles.card}>
+              <Text style= {styles.cardTitle}>PRODUCTION HISTORY </Text>
+
+                <View style= {styles.row}>
+
+
+                  <View style={styles.textContainer_output}>
+                  <Text style={styles.batch_id}>Batch ID</Text>
+                  <Text style={styles.batch_num}>COP-001</Text>
+                  <Text style={styles.date}>Started: May 23, 26 10:00</Text>
+                  <Text style={styles.status}>Status: Ongoing </Text>
+                </View>
+
+              
+              </View>
 
             </View>
 
@@ -132,4 +187,59 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
+  Box: {
+    width: 150,
+    height:70,
+    borderRadius: 16,
+    backgroundColor: '#EAF3E8', 
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+   textContainer_output: {
+    flex: 1,
+  },
+
+  label_output: {
+    fontSize: 13,
+    color: '#333',
+    textAlign: 'center',
+    marginTop: 5
+  },
+
+  weight_output: {
+    fontSize: 27,
+    fontWeight: '700',
+    color: '#1E8A3A',
+    marginTop: 5
+  },
+
+   Batch: {
+    width: 340,
+    height: 110,
+    borderRadius: 16,
+    backgroundColor: '#EAF3E8', 
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  batch_id: {
+    fontSize: 15,
+    marginTop: 7
+  },
+
+  batch_num: {
+    fontSize: 18,
+    marginTop: 5
+  },
+
+  status: {
+    fontSize: 15,
+    marginTop: 3
+  },
+
+  date: {
+    fontSize: 13,
+    marginTop: 3
+  }
 });

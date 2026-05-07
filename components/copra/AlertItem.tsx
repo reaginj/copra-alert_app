@@ -32,23 +32,20 @@ export default function AlertItem({
   return (
     <View style={styles.card}>
 
-      {/* TOP ROW */}
+
       <View style={styles.topRow}>
         <View style={styles.row}>
           <Ionicons name="alert-circle-outline" size={20} color={getColor()} />
           <Text style={styles.title}>{title}</Text>
         </View>
 
-        {/* BADGE */}
         <View style={[styles.badge, getBadgeStyle()]}>
           <Text style={styles.badgeText}>{type}</Text>
         </View>
       </View>
 
-      {/* MESSAGE */}
       <Text style={styles.message}>{message}</Text>
 
-      {/* META */}
       <Text style={styles.meta}>
         {temp ? `${temp} • ` : ''}{time}
       </Text>

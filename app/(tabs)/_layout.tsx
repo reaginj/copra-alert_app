@@ -54,7 +54,7 @@ export default function TabLayout() {
         name="supply"
         options={{
           title: 'Supply Chain',
-          tabBarIcon: ({ color }) => <FontAwesome5 name="truck" size={24} />,
+          tabBarIcon: ({ color }) => <FontAwesome5 name="truck" size={24} color={color}/>,
         }}
       />  
     </Tabs>
