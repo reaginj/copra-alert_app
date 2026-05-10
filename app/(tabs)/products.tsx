@@ -1,102 +1,138 @@
 import Header from '@/components/copra/Header';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function Product() {
   return (
     <View style={styles.screen}>
-          <SafeAreaView edges={['top']} style={styles.topSafeArea}>
-            <Header
-              title="Products"
-              subtitle= "Drying Results and Copra Output"
+      <SafeAreaView edges={['top']} style={styles.topSafeArea}>
+        <Header
+          title="Products"
+          subtitle="Drying Results and Copra Output"
+        />
+      </SafeAreaView>
 
-            />
-          </SafeAreaView>
-    
-          <View style={styles.content}>
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
 
-            <View style= {styles.card}>
-              <Text style= {styles.cardTitle}>Weight Measurement </Text>
-
-              <View style= {styles.row}>
-
-                <View style={styles.iconBox}>
-                  <Ionicons name="scale-outline" size={60} color="#1E8A3A" />
-                </View>
-
-                <View style={styles.textContainer}>
-                  <Text style={styles.label}>Kasalukuyang Timbang</Text>
-                  <Text style={styles.weight}>240 kg</Text>
-                  <Text style={styles.sub}>Huling Update: 9:30 AM</Text>
-                </View>
-              
-              </View>
-            </View>
-
-            <View style= {styles.card}>
-              <Text style= {styles.cardTitle}>Output Computation</Text>
-
-                <View style= {styles.row}>
-
-                <View style={styles.Box}>
-                  <View style={styles.textContainer_output}>
-                  <Text style={styles.label_output}>Total Output</Text>
-                  <Text style={styles.weight_output}>240 kg</Text>
-
-                </View>
-                </View>
-
-                <View style={styles.Box}>
-                  <View style={styles.textContainer_output}>
-                  <Text style={styles.label_output}>Estimated Value</Text>
-                  <Text style={styles.weight_output}>₱240.00</Text>
-
-                </View>
-                </View>
-              
-              </View>
-
-            </View>
-
-             <View style= {styles.card}>
-              <Text style= {styles.cardTitle}>Batch Recording</Text>
-
-                <View style= {styles.row}>
-
-
-                  <View style={styles.textContainer_output}>
-                  <Text style={styles.batch_id}>Batch ID</Text>
-                  <Text style={styles.batch_num}>COP-001</Text>
-                  <Text style={styles.date}>Started: May 23, 26 10:00</Text>
-                  <Text style={styles.status}>Status: Ongoing </Text>
-                </View>
-
-              
-              </View>
-
-            </View>
-
-             <View style= {styles.card}>
-              <Text style= {styles.cardTitle}>PRODUCTION HISTORY </Text>
-
-                <View style= {styles.row}>
-
-
-                  <View style={styles.textContainer_output}>
-                  <Text style={styles.batch_id}>Batch ID</Text>
-                  <Text style={styles.batch_num}>COP-001</Text>
-                  <Text style={styles.date}>Started: May 23, 26 10:00</Text>
-                  <Text style={styles.status}>Status: Ongoing </Text>
-                </View>
-
-              
-              </View>
-
-            </View>
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>Weight Measurement</Text>
 
           </View>
+
+          <View style={styles.row}>
+            <View style={styles.iconBox}>
+              <Ionicons name="scale-outline" size={60} color="#1E8A3A" />
+            </View>
+
+            <View style={styles.textContainer}>
+              <Text style={styles.label}>Kasalukuyang Timbang</Text>
+              <Text style={styles.weight}>240 kg</Text>
+
+              <View style={styles.updateRow}>
+                <Ionicons name="time-outline" size={16} color="#333" />
+                <Text style={styles.sub}>Huling Update: 9:30 AM</Text>
+              </View>
+            </View>
+          </View>
         </View>
+
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Output Computation</Text>
+
+          <View style={styles.outputRow}>
+            <View style={styles.outputBox}>
+              <Text style={styles.labelOutput}>Total Output</Text>
+              <Text style={styles.outputValue}>240 kg</Text>
+            </View>
+
+            <View style={styles.outputBox}>
+              <Text style={styles.labelOutput}>Estimated Value</Text>
+              <Text style={styles.outputValue}>₱14,520</Text>
+            </View>
+          </View>
+        </View>
+
+
+        <View style={styles.batchCard}>
+          <Text style={styles.cardTitle}>Batch Recording</Text>
+
+          <View style={styles.batchRow}>
+            <View style={styles.batchIconBox}>
+              <Ionicons name="clipboard-outline" size={55} color="#A66A00" />
+            </View>
+
+            <View style={styles.batchInfo}>
+              <Text style={styles.batchLabel}>Batch ID</Text>
+              <Text style={styles.batchNum}>COP-001</Text>
+              <Text style={styles.date}>Started: May 23, 2026 10:00 AM</Text>
+
+              <View style={styles.statusRow}>
+                <Text style={styles.statusText}>Status:</Text>
+
+                <View style={styles.ongoingBadge}>
+                  <Text style={styles.ongoingText}>Ongoing</Text>
+                </View>
+              </View>
+            </View>
+
+            <Ionicons name="chevron-forward" size={24} color="#A66A00" />
+          </View>
+        </View>
+
+
+        <View style={styles.card}>
+          <View style={styles.historyHeader}>
+            <Text style={styles.cardTitle}>Production History</Text>
+
+            <TouchableOpacity>
+              <Text style={styles.seeAll}>See All</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.tableHeader}>
+            <Text style={styles.tableHeadText}>Batch ID</Text>
+            <Text style={styles.tableHeadText}>Date</Text>
+            <Text style={styles.tableHeadText}>Output</Text>
+            <Text style={styles.tableHeadText}>Status</Text>
+          </View>
+
+          <View style={styles.tableRow}>
+            <Text style={styles.tableText}>COP-001</Text>
+            <Text style={styles.tableText}>May 23</Text>
+            <Text style={styles.tableText}>240 kg</Text>
+
+            <View style={styles.ongoingBadge}>
+              <Text style={styles.ongoingText}>Ongoing</Text>
+            </View>
+          </View>
+
+          <View style={styles.tableRow}>
+            <Text style={styles.tableText}>COP-000</Text>
+            <Text style={styles.tableText}>May 15</Text>
+            <Text style={styles.tableText}>245 kg</Text>
+
+            <View style={styles.completeBadge}>
+              <Text style={styles.completeText}>Done</Text>
+            </View>
+          </View>
+
+          <View style={styles.tableRow}>
+            <Text style={styles.tableText}>COP-000</Text>
+            <Text style={styles.tableText}>May 10</Text>
+            <Text style={styles.tableText}>238 kg</Text>
+
+            <View style={styles.completeBadge}>
+              <Text style={styles.completeText}>Done</Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.bottomSpace} />
+      </ScrollView>
+    </View>
   );
 }
 
@@ -105,50 +141,66 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F6F8F4',
   },
+
   topSafeArea: {
     backgroundColor: '#4A3728',
   },
-  header: {
-    backgroundColor: '#4A3728',
-    paddingHorizontal: 15,
-    paddingVertical: 15,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#FFFFFF',
 
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#F6F1B9',
-    paddingTop: 3
-
-  },
   content: {
     flex: 1,
     padding: 20,
   },
 
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: '#FFFFFF',
     borderRadius: 14,
     padding: 16,
-    marginBottom: 14, 
+    marginBottom: 14,
     borderWidth: 1,
-    borderColor: '#fff',
+    borderColor: '#EFEFEF',
 
-    shadowColor: "#000",
+    shadowColor: '#000',
     shadowOpacity: 0.08,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 },
     elevation: 8,
   },
 
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+
   cardTitle: {
     fontSize: 16,
     fontWeight: '700',
-    marginBottom: 10
+    marginBottom: 12,
+    color: '#1A1A1A',
+  },
+
+  liveBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EAF3E8',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    marginBottom: 12,
+    gap: 6,
+  },
+
+  liveDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#1E8A3A',
+  },
+
+  liveText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1E8A3A',
   },
 
   row: {
@@ -157,28 +209,11 @@ const styles = StyleSheet.create({
     gap: 16,
   },
 
-  label: {
-    fontSize: 13,
-    color: '#333',
-  },
-
-  weight: {
-    fontSize: 40,
-    fontWeight: '700',
-    color: '#1E8A3A',
-  },
-
-  sub: {
-    fontSize: 12,
-    color: '#555',
-    marginTop: 4,
-  },
-
   iconBox: {
     width: 90,
     height: 90,
     borderRadius: 16,
-    backgroundColor: '#EAF3E8', 
+    backgroundColor: '#EAF3E8',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -187,59 +222,197 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-  Box: {
-    width: 150,
-    height:70,
+  label: {
+    fontSize: 13,
+    color: '#333333',
+  },
+
+  weight: {
+    fontSize: 40,
+    fontWeight: '800',
+    color: '#1E8A3A',
+    marginTop: 4,
+  },
+
+  updateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 4,
+  },
+
+  sub: {
+    fontSize: 12,
+    color: '#555555',
+  },
+
+  outputRow: {
+  flexDirection: 'row',
+  gap: 12,
+},
+
+  outputBox: {
+    flex: 1,
+    minHeight: 105,
     borderRadius: 16,
-    backgroundColor: '#EAF3E8', 
+    backgroundColor: '#EAF3E8',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 14,
+  },
+
+  labelOutput: {
+    fontSize: 13,
+    color: '#333333',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+
+  outputValue: {
+    fontSize: 25,
+    fontWeight: '800',
+    color: '#1E8A3A',
+    textAlign: 'center',
+  },
+
+  batchCard: {
+    backgroundColor: '#FFF6E8',
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#F3E0BE',
+
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
+  },
+
+  batchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+
+  batchIconBox: {
+    width: 82,
+    height: 82,
+    borderRadius: 16,
+    backgroundColor: '#FFE7B8',
     justifyContent: 'center',
     alignItems: 'center',
   },
 
-   textContainer_output: {
+  batchInfo: {
     flex: 1,
   },
 
-  label_output: {
+  batchLabel: {
     fontSize: 13,
-    color: '#333',
-    textAlign: 'center',
-    marginTop: 5
+    color: '#333333',
   },
 
-  weight_output: {
-    fontSize: 27,
-    fontWeight: '700',
-    color: '#1E8A3A',
-    marginTop: 5
-  },
-
-   Batch: {
-    width: 340,
-    height: 110,
-    borderRadius: 16,
-    backgroundColor: '#EAF3E8', 
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  batch_id: {
-    fontSize: 15,
-    marginTop: 7
-  },
-
-  batch_num: {
-    fontSize: 18,
-    marginTop: 5
-  },
-
-  status: {
-    fontSize: 15,
-    marginTop: 3
+  batchNum: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#7A4B00',
+    marginTop: 3,
   },
 
   date: {
+    fontSize: 12,
+    color: '#333333',
+    marginTop: 4,
+  },
+
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+  },
+
+  statusText: {
     fontSize: 13,
-    marginTop: 3
-  }
+    color: '#333333',
+  },
+
+  ongoingBadge: {
+    backgroundColor: '#FFE3A8',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
+    alignSelf: 'center',
+  },
+
+  ongoingText: {
+    color: '#9A6100',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
+  completeBadge: {
+    backgroundColor: '#DDEFD8',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
+    alignSelf: 'center',
+  },
+
+  completeText: {
+    color: '#1E6B32',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
+  historyHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+
+  seeAll: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1E8A3A',
+    marginBottom: 12,
+  },
+
+  tableHeader: {
+    flexDirection: 'row',
+    backgroundColor: '#F4F4F4',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+  },
+
+  tableHeadText: {
+    flex: 1,
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#222222',
+    textAlign: 'center',
+  },
+
+  tableRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEEEEE',
+  },
+
+  tableText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#222222',
+    textAlign: 'center',
+  },
+
+  bottomSpace: {
+    height: 30,
+  },
 });
