@@ -14,11 +14,9 @@ export default function Product() {
       </SafeAreaView>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <Text style={styles.cardTitle}>Weight Measurement</Text>
-
           </View>
 
           <View style={styles.row}>
@@ -38,7 +36,6 @@ export default function Product() {
           </View>
         </View>
 
-
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Output Computation</Text>
 
@@ -54,7 +51,6 @@ export default function Product() {
             </View>
           </View>
         </View>
-
 
         <View style={styles.batchCard}>
           <Text style={styles.cardTitle}>Batch Recording</Text>
@@ -82,7 +78,6 @@ export default function Product() {
           </View>
         </View>
 
-
         <View style={styles.card}>
           <View style={styles.historyHeader}>
             <Text style={styles.cardTitle}>Production History</Text>
@@ -93,39 +88,80 @@ export default function Product() {
           </View>
 
           <View style={styles.tableHeader}>
-            <Text style={styles.tableHeadText}>Batch ID</Text>
-            <Text style={styles.tableHeadText}>Date</Text>
-            <Text style={styles.tableHeadText}>Output</Text>
-            <Text style={styles.tableHeadText}>Status</Text>
-          </View>
+            <View style={styles.colBatch}>
+              <Text style={styles.tableHeadText}>Batch ID</Text>
+            </View>
 
-          <View style={styles.tableRow}>
-            <Text style={styles.tableText}>COP-001</Text>
-            <Text style={styles.tableText}>May 23</Text>
-            <Text style={styles.tableText}>240 kg</Text>
+            <View style={styles.colDate}>
+              <Text style={styles.tableHeadText}>Date</Text>
+            </View>
 
-            <View style={styles.ongoingBadge}>
-              <Text style={styles.ongoingText}>Ongoing</Text>
+            <View style={styles.colOutput}>
+              <Text style={styles.tableHeadText}>Output</Text>
+            </View>
+
+            <View style={styles.colStatus}>
+              <Text style={styles.tableHeadText}>Status</Text>
             </View>
           </View>
 
           <View style={styles.tableRow}>
-            <Text style={styles.tableText}>COP-000</Text>
-            <Text style={styles.tableText}>May 15</Text>
-            <Text style={styles.tableText}>245 kg</Text>
+            <View style={styles.colBatch}>
+              <Text style={styles.tableText}>COP-001</Text>
+            </View>
 
-            <View style={styles.completeBadge}>
-              <Text style={styles.completeText}>Done</Text>
+            <View style={styles.colDate}>
+              <Text style={styles.tableText}>May 23</Text>
+            </View>
+
+            <View style={styles.colOutput}>
+              <Text style={styles.tableText}>240 kg</Text>
+            </View>
+
+            <View style={styles.colStatus}>
+              <View style={styles.ongoingBadge}>
+                <Text style={styles.ongoingText}>Ongoing</Text>
+              </View>
             </View>
           </View>
 
           <View style={styles.tableRow}>
-            <Text style={styles.tableText}>COP-000</Text>
-            <Text style={styles.tableText}>May 10</Text>
-            <Text style={styles.tableText}>238 kg</Text>
+            <View style={styles.colBatch}>
+              <Text style={styles.tableText}>COP-000</Text>
+            </View>
 
-            <View style={styles.completeBadge}>
-              <Text style={styles.completeText}>Done</Text>
+            <View style={styles.colDate}>
+              <Text style={styles.tableText}>May 15</Text>
+            </View>
+
+            <View style={styles.colOutput}>
+              <Text style={styles.tableText}>245 kg</Text>
+            </View>
+
+            <View style={styles.colStatus}>
+              <View style={styles.completeBadge}>
+                <Text style={styles.completeText}>Done</Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.tableRow}>
+            <View style={styles.colBatch}>
+              <Text style={styles.tableText}>COP-000</Text>
+            </View>
+
+            <View style={styles.colDate}>
+              <Text style={styles.tableText}>May 10</Text>
+            </View>
+
+            <View style={styles.colOutput}>
+              <Text style={styles.tableText}>238 kg</Text>
+            </View>
+
+            <View style={styles.colStatus}>
+              <View style={styles.completeBadge}>
+                <Text style={styles.completeText}>Done</Text>
+              </View>
             </View>
           </View>
         </View>
@@ -179,30 +215,6 @@ const styles = StyleSheet.create({
     color: '#1A1A1A',
   },
 
-  liveBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#EAF3E8',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
-    marginBottom: 12,
-    gap: 6,
-  },
-
-  liveDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#1E8A3A',
-  },
-
-  liveText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#1E8A3A',
-  },
-
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -247,9 +259,9 @@ const styles = StyleSheet.create({
   },
 
   outputRow: {
-  flexDirection: 'row',
-  gap: 12,
-},
+    flexDirection: 'row',
+    gap: 12,
+  },
 
   outputBox: {
     flex: 1,
@@ -340,34 +352,6 @@ const styles = StyleSheet.create({
     color: '#333333',
   },
 
-  ongoingBadge: {
-    backgroundColor: '#FFE3A8',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 10,
-    alignSelf: 'center',
-  },
-
-  ongoingText: {
-    color: '#9A6100',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-
-  completeBadge: {
-    backgroundColor: '#DDEFD8',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 10,
-    alignSelf: 'center',
-  },
-
-  completeText: {
-    color: '#1E6B32',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-
   historyHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -385,16 +369,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     backgroundColor: '#F4F4F4',
     paddingVertical: 10,
-    paddingHorizontal: 8,
     borderRadius: 10,
-  },
-
-  tableHeadText: {
-    flex: 1,
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#222222',
-    textAlign: 'center',
   },
 
   tableRow: {
@@ -405,11 +380,65 @@ const styles = StyleSheet.create({
     borderBottomColor: '#EEEEEE',
   },
 
+  colBatch: {
+    width: '25%',
+    alignItems: 'center',
+  },
+
+  colDate: {
+    width: '22%',
+    alignItems: 'center',
+  },
+
+  colOutput: {
+    width: '23%',
+    alignItems: 'center',
+  },
+
+  colStatus: {
+    width: '30%',
+    alignItems: 'center',
+  },
+
+  tableHeadText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#222222',
+    textAlign: 'center',
+  },
+
   tableText: {
-    flex: 1,
     fontSize: 12,
     color: '#222222',
     textAlign: 'center',
+  },
+
+  ongoingBadge: {
+    backgroundColor: '#FFE3A8',
+    width: 85,
+    paddingVertical: 6,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+
+  ongoingText: {
+    color: '#9A6100',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
+  completeBadge: {
+    backgroundColor: '#DDEFD8',
+    width: 85,
+    paddingVertical: 6,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+
+  completeText: {
+    color: '#1E6B32',
+    fontSize: 12,
+    fontWeight: '700',
   },
 
   bottomSpace: {
