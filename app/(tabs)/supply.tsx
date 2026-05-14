@@ -4,6 +4,7 @@ import { Picker } from '@react-native-picker/picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Header from '@/components/copra/Header';
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
+import Ionicons from '@expo/vector-icons/build/Ionicons';
 
 export default function HomeScreen() {
   const [buyer, setBuyer] = useState('');
@@ -167,6 +168,34 @@ export default function HomeScreen() {
                 </View>
               </View>
             </View>
+            
+            <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>Buyer / Trader Information</Text>
+          </View>
+
+          <View style={styles.row}>
+            <View style={styles.traderBox}>
+              <Ionicons name="person" size={25} color="#1E8A3A" />
+            </View>
+
+            
+            <View style={styles.traderName}>
+              <View style={styles.traderRow}>
+              <Text style={styles.label}>Juan Dela Cruz</Text>
+              <Text style={styles.totalDelivery}>Total Deliveries</Text>
+              </View>
+
+              <View style={styles.traderRow}>
+                <Text style={styles.sub}>09123456789</Text>
+                <Text style={styles.totalDelivery}>5</Text>
+              </View>
+
+            </View>
+          </View>
+        </View>
+
+
           </View>
         </View>
       </TouchableWithoutFeedback>
@@ -267,6 +296,8 @@ export default function HomeScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+       
     </View>
   );
 }
@@ -333,7 +364,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
+  traderBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 16,
+    backgroundColor: '#EAF3E8',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
   textContainer: {
+    flex: 1,
+  },
+
+  traderName: {
     flex: 1,
   },
 
@@ -464,5 +508,23 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     textAlign: 'center',
     fontWeight: '700',
+  },
+
+  traderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+  },
+
+  sub: {
+    fontSize: 11,
+    color: '#555555',
+  },
+
+  totalDelivery: {
+    fontSize: 11,
+    color: '#555555',
+    
   },
 });
