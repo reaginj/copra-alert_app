@@ -1,33 +1,39 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
 import Header from '@/components/copra/Header';
 import FeatureTemp from '@/components/copra/featureTemp';
 import DashboardAlertCard from '@/components/copra/DashbordAlert';
 import ProductCard from '@/components/copra/productCard';
 import DryProgress from '@/components/copra/dryProgress';
 
-export default function HomeScreen() {
+export default function DashboardFarmer() {
   return (
     <View style={styles.screen}>
       <SafeAreaView edges={['top']} style={styles.topSafeArea}>
         <Header
           title="Copra-Alert"
           subtitle="Monitoring and Supply Chain System"
+          profileRoute="/(farmer)/profile"
         />
       </SafeAreaView>
 
-      <View style={styles.content}>
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={styles.contentContainer}
+        showsVerticalScrollIndicator={false}
+      >
         <FeatureTemp />
+
         <Text style={styles.title_card}> MGA ALERTO</Text>
+
         <DashboardAlertCard />
         <ProductCard />
-        <DryProgress/>
-      </View>
+        <DryProgress />
+      </ScrollView>
     </View>
   );
 }
-
-
 
 const styles = StyleSheet.create({
   screen: {
@@ -47,5 +53,8 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: 13,
+  },
+  contentContainer: {
+    paddingBottom: 24,
   },
 });

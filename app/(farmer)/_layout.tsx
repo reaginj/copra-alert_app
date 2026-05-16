@@ -23,7 +23,7 @@ export default function TabLayout() {
         },
       }}>
       <Tabs.Screen
-        name="index"
+        name="dashboard_farmer"
         options={{
           title: 'Home',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
@@ -58,6 +58,12 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <FontAwesome5 name="truck" size={24} color={color}/>,
         }}
       />  
+      <Tabs.Screen
+        name="profile"
+        options={{
+          href: null,
+        }}
+      />
     </Tabs>
   );
 }

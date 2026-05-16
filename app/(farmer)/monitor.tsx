@@ -13,6 +13,7 @@ export default function MonitorScreen() {
         <Header
           title="Monitor"
           subtitle="Current Drying View"
+          profileRoute="/(farmer)/profile"
         />
       </SafeAreaView>
 
