@@ -2,11 +2,11 @@ import { Keyboard, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'r
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 
 type DeliveryRecordingCardProps = {
-  warehouseDestination: string;
+  warehouseLocation: string;
   quantity: string;
   price: string;
   selectedDate: string;
-  onWarehouseDestinationChange: (value: string) => void;
+  onWarehouseLocationChange: (value: string) => void;
   onQuantityChange: (value: string) => void;
   onPriceChange: (value: string) => void;
   onOpenDatePicker: () => void;
@@ -14,11 +14,11 @@ type DeliveryRecordingCardProps = {
 };
 
 export default function DeliveryRecordingCard({
-  warehouseDestination,
+  warehouseLocation,
   quantity,
   price,
   selectedDate,
-  onWarehouseDestinationChange,
+  onWarehouseLocationChange,
   onQuantityChange,
   onPriceChange,
   onOpenDatePicker,
@@ -37,14 +37,14 @@ export default function DeliveryRecordingCard({
 
         <View style={styles.textContainer}>
           <View style={styles.inputRow}>
-            <Text style={styles.label}>Warehouse Destination</Text>
+            <Text style={styles.label}>Warehouse Location</Text>
 
             <TextInput
               style={styles.input}
-              placeholder="Enter warehouse"
+              placeholder="Enter warehouse location"
               placeholderTextColor="#888"
-              value={warehouseDestination}
-              onChangeText={onWarehouseDestinationChange}
+              value={warehouseLocation}
+              onChangeText={onWarehouseLocationChange}
               returnKeyType="done"
               onSubmitEditing={Keyboard.dismiss}
             />

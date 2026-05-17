@@ -28,7 +28,7 @@ type QualityCheckModalProps = {
   onActualWeightChange: (value: string) => void;
   onMoistureConditionChange: (value: MoistureCondition) => void;
   onQualityGradeChange: (value: QualityGrade) => void;
-  onCompleteQualityCheck: (status: Extract<BatchStatus, 'Added to Inventory' | 'Rejected'>) => void;
+  onCompleteQualityCheck: (status: Extract<BatchStatus, 'Accepted' | 'Rejected'>) => void;
   onClose: () => void;
 };
 
@@ -122,7 +122,7 @@ export default function QualityCheckModal({
               <TouchableOpacity
                 style={styles.acceptButton}
                 activeOpacity={0.85}
-                onPress={() => onCompleteQualityCheck('Added to Inventory')}
+                onPress={() => onCompleteQualityCheck('Accepted')}
               >
                 <Text style={styles.acceptText}>Accept Batch</Text>
               </TouchableOpacity>

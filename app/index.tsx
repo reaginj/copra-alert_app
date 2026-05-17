@@ -5,6 +5,7 @@ import {
   Keyboard,
   StyleSheet,
   TouchableWithoutFeedback,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -16,8 +17,10 @@ import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } f
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 
 type Role = AuthRole;
+type AuthMode = 'login' | 'register';
 
 export default function Login() {
+  const [mode, setMode] = useState<AuthMode>('login');
   const [role, setRole] = useState<Role>('farmer');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -45,19 +48,20 @@ export default function Login() {
       );
 
       const { user } = userCredential;
+      const fallbackDisplayName = email.trim().split('@')[0];
 
       if (role === 'farmer') {
         await setDoc(doc(db, 'users', user.uid), {
           uid: user.uid,
           email: user.email,
           role: 'farmer',
-          displayName: '',
+          displayName: fallbackDisplayName,
           contactNumber: '',
-          location: '',
           farmName: '',
           farmLocation: '',
           ownerVerificationStatus: 'not_requested',
           isVerifiedOwner: false,
+          profileCompleted: false,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
@@ -66,11 +70,11 @@ export default function Login() {
           uid: user.uid,
           email: user.email,
           role: 'warehouse',
-          displayName: '',
+          displayName: fallbackDisplayName,
           contactNumber: '',
-          location: '',
           warehouseName: '',
           warehouseLocation: '',
+          profileCompleted: false,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
@@ -130,9 +134,13 @@ export default function Login() {
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
       <SafeAreaView style={styles.container}>
+        <View style={styles.topAccent} />
+        <View style={styles.bottomAccent} />
+
         <AuthBrandHeader />
 
         <AuthCard
+          mode={mode}
           email={email}
           password={password}
           selectedRole={role}
@@ -141,6 +149,7 @@ export default function Login() {
           onRoleChange={setRole}
           onLogin={handleLogin}
           onRegister={handleRegister}
+          onModeChange={setMode}
         />
       </SafeAreaView>
     </TouchableWithoutFeedback>
@@ -150,8 +159,28 @@ export default function Login() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F4F8ED',
+    backgroundColor: '#F7EFE3',
     padding: 24,
     justifyContent: 'center',
+  },
+  topAccent: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 120,
+    backgroundColor: '#4A3728',
+    borderBottomLeftRadius: 36,
+    borderBottomRightRadius: 36,
+  },
+  bottomAccent: {
+    position: 'absolute',
+    left: -34,
+    bottom: -34,
+    width: 130,
+    height: 130,
+    borderRadius: 65,
+    backgroundColor: '#D8B57A',
+    opacity: 0.28,
   },
 });

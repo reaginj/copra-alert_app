@@ -4,13 +4,13 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 const warehouses = [
   {
     name: 'Davao Copra Warehouse',
-    location: 'Davao City',
+    warehouseLocation: 'Davao City',
     contactNumber: '0912 345 6789',
     totalDeliveries: '12',
   },
   {
     name: 'Quezon Warehouse Hub',
-    location: 'Quezon Province',
+    warehouseLocation: 'Quezon Province',
     contactNumber: '0998 765 4321',
     totalDeliveries: '8',
   },
@@ -34,7 +34,7 @@ export default function WarehouseInfoCard() {
 
           <View style={styles.infoBox}>
             <Text style={styles.name}>{warehouse.name}</Text>
-            <Text style={styles.sub}>{warehouse.location}</Text>
+            <Text style={styles.sub}>{warehouse.warehouseLocation}</Text>
             <Text style={styles.sub}>{warehouse.contactNumber}</Text>
           </View>
 

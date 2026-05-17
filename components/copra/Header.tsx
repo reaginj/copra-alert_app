@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+
+import ProfilePopup from '@/components/copra/ProfilePopup';
 
 type HeaderProps = {
   title: string;
@@ -13,25 +15,38 @@ export default function Header({
   subtitle,
   profileRoute,
 }: HeaderProps) {
+  const [isProfileVisible, setIsProfileVisible] = useState(false);
+  const profileRole = profileRoute?.includes('warehouse') ? 'warehouse' : 'farmer';
+
   const handleProfilePress = () => {
     if (profileRoute) {
-      router.push(profileRoute as any);
+      setIsProfileVisible(true);
     }
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.textContainer}>
-        <Text style={styles.title}>{title}</Text>
-        {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+    <>
+      <View style={styles.container}>
+        <View style={styles.textContainer}>
+          <Text style={styles.title}>{title}</Text>
+          {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+        </View>
+
+        {profileRoute ? (
+          <TouchableOpacity style={styles.profileButton} onPress={handleProfilePress}>
+            <Ionicons name="person-circle-outline" size={34} color="#F6F1B9" />
+          </TouchableOpacity>
+        ) : null}
       </View>
 
       {profileRoute ? (
-        <TouchableOpacity style={styles.profileButton} onPress={handleProfilePress}>
-          <Ionicons name="person-circle-outline" size={34} color="#F6F1B9" />
-        </TouchableOpacity>
+        <ProfilePopup
+          visible={isProfileVisible}
+          role={profileRole}
+          onClose={() => setIsProfileVisible(false)}
+        />
       ) : null}
-    </View>
+    </>
   );
 }
 

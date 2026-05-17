@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { StyleSheet, View, Keyboard, ScrollView } from 'react-native';
+import { StyleSheet, View, Keyboard, ScrollView, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import DeliveryHistoryCard from '@/components/copra/DeliveryHistoryCard';
@@ -10,7 +10,8 @@ import TransactionSummaryCard from '@/components/copra/TransactionSummaryCard';
 import WarehouseInfoCard from '@/components/copra/WarehouseInfoCard';
 
 export default function HomeScreen() {
-  const [warehouseDestination, setWarehouseDestination] = useState('');
+  const { width } = useWindowDimensions();
+  const [warehouseLocation, setWarehouseLocation] = useState('');
   const [quantity, setQuantity] = useState('');
   const [price, setPrice] = useState('');
 
@@ -89,16 +90,18 @@ export default function HomeScreen() {
 
   const handleSaveDelivery = () => {
     const deliveryRecord = {
-      warehouseDestination,
+      warehouseLocation,
       quantity,
       pricePerKg: price,
       deliveryDate: formatSelectedDate(),
+      status: 'in_transit',
     };
 
     console.log(deliveryRecord);
   };
 
   const daysInSelectedMonth = getDaysInMonth(tempMonth, tempYear);
+  const isWideLayout = width >= 720;
 
   return (
     <View style={styles.screen}>
@@ -120,11 +123,11 @@ export default function HomeScreen() {
           onScrollBeginDrag={Keyboard.dismiss}
         >
           <DeliveryRecordingCard
-            warehouseDestination={warehouseDestination}
+            warehouseLocation={warehouseLocation}
             quantity={quantity}
             price={price}
             selectedDate={formatSelectedDate()}
-            onWarehouseDestinationChange={setWarehouseDestination}
+            onWarehouseLocationChange={setWarehouseLocation}
             onQuantityChange={setQuantity}
             onPriceChange={setPrice}
             onOpenDatePicker={openDatePicker}
@@ -132,8 +135,14 @@ export default function HomeScreen() {
           />
 
           <WarehouseInfoCard />
-          <TransactionSummaryCard />
-          <DeliveryHistoryCard />
+          <View style={[styles.summaryHistorySection, isWideLayout && styles.summaryHistorySectionWide]}>
+            <View style={[styles.summaryPane, isWideLayout && styles.summaryPaneWide]}>
+              <TransactionSummaryCard />
+            </View>
+            <View style={[styles.historyPane, isWideLayout && styles.historyPaneWide]}>
+              <DeliveryHistoryCard />
+            </View>
+          </View>
         </ScrollView>
       </View>
 
@@ -175,5 +184,24 @@ const styles = StyleSheet.create({
   contentContainer: {
     padding: 20,
     paddingBottom: 40,
+  },
+  summaryHistorySection: {
+    gap: 14,
+  },
+  summaryHistorySectionWide: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  summaryPane: {
+    width: '100%',
+  },
+  summaryPaneWide: {
+    flex: 0.9,
+  },
+  historyPane: {
+    width: '100%',
+  },
+  historyPaneWide: {
+    flex: 1.4,
   },
 });

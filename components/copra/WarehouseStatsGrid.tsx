@@ -15,7 +15,7 @@ type WarehouseStatsGridProps = {
 export default function WarehouseStatsGrid({ stats }: WarehouseStatsGridProps) {
   return (
     <View style={styles.statsGrid}>
-      <StatCard icon="trail-sign-outline" label="In Transit" value={`${stats.inTransit}`} color="#1E8A3A" />
+      <StatCard icon="trail-sign-outline" label="In Transit" value={`${stats.inTransit}`} color="#B9770E" />
       <StatCard icon="shield-checkmark-outline" label="Under Review" value={`${stats.underReview}`} color="#B9770E" />
       <StatCard icon="checkmark-circle-outline" label="Accepted" value={`${stats.accepted}`} color="#2E7D32" />
       <StatCard icon="archive-outline" label="Inventory" value={stats.inventory} color="#4A3728" />

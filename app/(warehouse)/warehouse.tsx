@@ -15,7 +15,7 @@ const initialBatches: Batch[] = [
     batchId: 'BATCH-001',
     declaredWeight: '50 kg',
     receivedWeight: 'Pending',
-    location: 'Quezon Province',
+    farmLocation: 'Quezon Province',
     deliveryDate: 'Pending',
     status: 'In Transit',
     qualityGrade: 'Pending',
@@ -26,9 +26,9 @@ const initialBatches: Batch[] = [
     batchId: 'BATCH-002',
     declaredWeight: '75 kg',
     receivedWeight: '74.5 kg',
-    location: 'Lucena City',
+    farmLocation: 'Lucena City',
     deliveryDate: 'May 16, 2026',
-    status: 'Under Quality Check',
+    status: 'Under Review',
     qualityGrade: 'Pending',
     moistureCondition: 'Pending',
   },
@@ -37,9 +37,9 @@ const initialBatches: Batch[] = [
     batchId: 'BATCH-003',
     declaredWeight: '45 kg',
     receivedWeight: '45 kg',
-    location: 'Tayabas',
+    farmLocation: 'Tayabas',
     deliveryDate: 'May 15, 2026',
-    status: 'Added to Inventory',
+    status: 'Accepted',
     qualityGrade: 'Good',
     moistureCondition: 'Dry',
   },
@@ -48,7 +48,7 @@ const initialBatches: Batch[] = [
     batchId: 'BATCH-004',
     declaredWeight: '40 kg',
     receivedWeight: '38.5 kg',
-    location: 'Sariaya',
+    farmLocation: 'Sariaya',
     deliveryDate: 'May 14, 2026',
     status: 'Rejected',
     qualityGrade: 'Poor',
@@ -68,15 +68,15 @@ export default function WarehouseDashboard() {
   const [qualityGrade, setQualityGrade] = useState<QualityGrade>('Good');
 
   const inTransitBatches = batches.filter((batch) => batch.status === 'In Transit');
-  const underReviewBatches = batches.filter((batch) => batch.status === 'Under Quality Check');
+  const underReviewBatches = batches.filter((batch) => batch.status === 'Under Review');
   const completedBatches = batches.filter(
-    (batch) => batch.status === 'Added to Inventory' || batch.status === 'Rejected'
+    (batch) => batch.status === 'Accepted' || batch.status === 'Rejected'
   );
 
   const stats = useMemo(() => {
     const inTransit = batches.filter((batch) => batch.status === 'In Transit').length;
-    const underReview = batches.filter((batch) => batch.status === 'Under Quality Check').length;
-    const accepted = batches.filter((batch) => batch.status === 'Added to Inventory').length;
+    const underReview = batches.filter((batch) => batch.status === 'Under Review').length;
+    const accepted = batches.filter((batch) => batch.status === 'Accepted').length;
 
     return {
       inTransit,
@@ -92,7 +92,7 @@ export default function WarehouseDashboard() {
         batch.batchId === batchId
           ? {
               ...batch,
-              status: 'Under Quality Check',
+              status: 'Under Review',
               receivedWeight: 'Pending',
             }
           : batch
@@ -116,7 +116,7 @@ export default function WarehouseDashboard() {
     setQualityGrade('Good');
   };
 
-  const completeQualityCheck = (status: Extract<BatchStatus, 'Added to Inventory' | 'Rejected'>) => {
+  const completeQualityCheck = (status: Extract<BatchStatus, 'Accepted' | 'Rejected'>) => {
     if (!selectedBatch) {
       return;
     }
@@ -161,7 +161,7 @@ export default function WarehouseDashboard() {
         />
 
         <WarehouseBatchSection
-          title="UNDER QUALITY CHECK"
+          title="UNDER REVIEW"
           batches={underReviewBatches}
           onReceiveBatch={handleReceiveBatch}
           onOpenQualityCheck={handleOpenQualityCheck}

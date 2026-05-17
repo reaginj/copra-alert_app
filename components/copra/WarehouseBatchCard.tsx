@@ -1,7 +1,7 @@
 import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
 import { FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
 
-export type BatchStatus = 'In Transit' | 'Under Quality Check' | 'Added to Inventory' | 'Rejected';
+export type BatchStatus = 'In Transit' | 'Under Review' | 'Accepted' | 'Rejected';
 export type QualityGrade = 'Pending' | 'Excellent' | 'Good' | 'Fair' | 'Poor';
 export type MoistureCondition = 'Pending' | 'Dry' | 'Slightly Moist' | 'Too Moist';
 
@@ -10,7 +10,7 @@ export type Batch = {
   batchId: string;
   declaredWeight: string;
   receivedWeight: string;
-  location: string;
+  farmLocation: string;
   deliveryDate?: string;
   status: BatchStatus;
   qualityGrade: QualityGrade;
@@ -18,9 +18,9 @@ export type Batch = {
 };
 
 export const statusColors: Record<BatchStatus, string> = {
-  'In Transit': '#1E8A3A',
-  'Under Quality Check': '#B9770E',
-  'Added to Inventory': '#2E7D32',
+  'In Transit': '#B9770E',
+  'Under Review': '#8A6412',
+  Accepted: '#2E7D32',
   Rejected: '#A43A2F',
 };
 
@@ -57,13 +57,13 @@ export default function WarehouseBatchCard({
       <View style={styles.batchDetails}>
         <DetailRow icon="scale" label="Declared Weight" value={batch.declaredWeight} />
         <DetailRow icon="scale-balance" label="Received Weight" value={batch.receivedWeight} />
-        <DetailRow icon="map-marker-outline" label="Location" value={batch.location} />
+        <DetailRow icon="map-marker-outline" label="Farm Location" value={batch.farmLocation} />
 
         {batch.status !== 'In Transit' && (
           <DetailRow icon="star-check-outline" label="Quality Grade" value={batch.qualityGrade} />
         )}
 
-        {(batch.status === 'Added to Inventory' || batch.status === 'Rejected') && (
+        {(batch.status === 'Accepted' || batch.status === 'Rejected') && (
           <DetailRow icon="water-percent" label="Moisture Condition" value={batch.moistureCondition} />
         )}
       </View>
@@ -76,7 +76,7 @@ export default function WarehouseBatchCard({
         </View>
       )}
 
-      {batch.status === 'Under Quality Check' && (
+      {batch.status === 'Under Review' && (
         <View style={styles.batchActions}>
           <TouchableOpacity style={styles.primaryButton} activeOpacity={0.85} onPress={() => onOpenQualityCheck(batch)}>
             <Text style={styles.primaryText}>Open Quality Check</Text>
