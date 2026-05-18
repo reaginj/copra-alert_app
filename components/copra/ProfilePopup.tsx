@@ -361,11 +361,6 @@ export default function ProfilePopup({ visible, role, onClose }: ProfilePopupPro
                     }
                   />
                   <SettingRow
-                    icon="notifications-outline"
-                    label="Notification Settings"
-                    onPress={() => showPlaceholder('Notification Settings')}
-                  />
-                  <SettingRow
                     icon="lock-closed-outline"
                     label="Change Password"
                     onPress={() => showPlaceholder('Change Password')}

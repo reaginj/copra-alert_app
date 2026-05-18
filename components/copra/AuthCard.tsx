@@ -12,6 +12,7 @@ type AuthCardProps = {
   onRoleChange: (role: AuthRole) => void;
   onLogin: () => void;
   onRegister: () => void;
+  onForgotPassword: () => void;
   onModeChange: (mode: 'login' | 'register') => void;
 };
 
@@ -25,14 +26,13 @@ export default function AuthCard({
   onRoleChange,
   onLogin,
   onRegister,
+  onForgotPassword,
   onModeChange,
 }: AuthCardProps) {
   const isRegisterMode = mode === 'register';
 
   return (
     <View style={styles.card}>
-      <View style={styles.cardAccent} />
-
       <Text style={styles.welcome}>
         {isRegisterMode ? 'Register' : 'Welcome Back!'}
       </Text>
@@ -42,7 +42,7 @@ export default function AuthCard({
 
       <TextInput
         style={styles.input}
-        placeholder="example@email.com"
+        placeholder="Email"
         placeholderTextColor="#9A8D80"
         value={email}
         onChangeText={onEmailChange}
@@ -53,13 +53,22 @@ export default function AuthCard({
 
       <TextInput
         style={styles.input}
-        placeholder="Enter your password"
+        placeholder="Password"
         placeholderTextColor="#9A8D80"
         value={password}
         onChangeText={onPasswordChange}
         secureTextEntry
         returnKeyType="done"
       />
+
+      {!isRegisterMode && (
+        <TouchableOpacity
+          style={styles.forgotButton}
+          onPress={onForgotPassword}
+        >
+          <Text style={styles.forgotText}>Forgot password?</Text>
+        </TouchableOpacity>
+      )}
 
       <RoleSelector
         selectedRole={selectedRole}
@@ -89,32 +98,23 @@ export default function AuthCard({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 22,
-    paddingTop: 26,
-    elevation: 7,
+    backgroundColor: '#FFFDF9',
+    borderRadius: 18,
+    padding: 20,
+    paddingTop: 24,
+    elevation: 9,
     borderWidth: 1,
-    borderColor: '#E2D2BD',
-    overflow: 'hidden',
+    borderColor: '#E1D1BA',
     shadowColor: '#4A3728',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.14,
-    shadowRadius: 14,
-  },
-  cardAccent: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 7,
-    backgroundColor: '#4A3728',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.16,
+    shadowRadius: 18,
   },
   welcome: {
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: '800',
     textAlign: 'center',
-    color: '#4A3728',
+    color: '#2E4F2F',
   },
   smallText: {
     textAlign: 'center',
@@ -125,17 +125,28 @@ const styles = StyleSheet.create({
   input: {
     borderWidth: 1,
     borderColor: '#D7CEC2',
-    borderRadius: 12,
+    borderRadius: 10,
     padding: 14,
     marginBottom: 14,
     fontSize: 15,
-    color: '#4A3728',
-    backgroundColor: '#FFFCF8',
+    color: '#3E2A1E',
+    backgroundColor: '#FFFFFF',
+  },
+  forgotButton: {
+    alignSelf: 'flex-end',
+    marginTop: -4,
+    marginBottom: 6,
+    paddingVertical: 4,
+  },
+  forgotText: {
+    color: '#277C3E',
+    fontSize: 13,
+    fontWeight: '700',
   },
   primaryButton: {
-    backgroundColor: '#1E8A3A',
+    backgroundColor: '#277C3E',
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 10,
     marginTop: 10,
   },
   primaryText: {
@@ -146,14 +157,14 @@ const styles = StyleSheet.create({
   },
   switchButton: {
     borderWidth: 1,
-    borderColor: '#4A3728',
+    borderColor: '#6B432C',
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 10,
     marginTop: 10,
-    backgroundColor: '#F8F0E3',
+    backgroundColor: '#F6EFE4',
   },
   switchButtonText: {
-    color: '#4A3728',
+    color: '#3E2A1E',
     fontWeight: '800',
     textAlign: 'center',
     fontSize: 16,

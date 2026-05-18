@@ -315,11 +315,6 @@ export default function FarmerProfile() {
                 onPress={() => showPlaceholder('Edit Farmer Profile')}
               />
               <SettingRow
-                icon="notifications-outline"
-                label="Notification Settings"
-                onPress={() => showPlaceholder('Notification Settings')}
-              />
-              <SettingRow
                 icon="lock-closed-outline"
                 label="Change Password"
                 onPress={() => showPlaceholder('Change Password')}

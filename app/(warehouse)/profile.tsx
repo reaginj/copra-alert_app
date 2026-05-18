@@ -157,11 +157,6 @@ export default function WarehouseProfile() {
                 onPress={() => showPlaceholder('Edit Warehouse Profile')}
               />
               <SettingRow
-                icon="notifications-outline"
-                label="Notification Settings"
-                onPress={() => showPlaceholder('Notification Settings')}
-              />
-              <SettingRow
                 icon="lock-closed-outline"
                 label="Change Password"
                 onPress={() => showPlaceholder('Change Password')}

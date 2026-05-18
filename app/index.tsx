@@ -13,7 +13,12 @@ import AuthBrandHeader from '@/components/copra/AuthBrandHeader';
 import AuthCard from '@/components/copra/AuthCard';
 import { AuthRole } from '@/components/copra/RoleSelector';
 import { auth, db } from '@/config/firebase';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import {
+  createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
+  signInWithEmailAndPassword,
+  signOut,
+} from 'firebase/auth';
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 
 type Role = AuthRole;
@@ -131,10 +136,26 @@ export default function Login() {
     }
   };
 
+  const handleForgotPassword = async () => {
+    const trimmedEmail = email.trim();
+
+    if (!trimmedEmail) {
+      Alert.alert('Email Required', 'Enter your email address first, then tap forgot password.');
+      return;
+    }
+
+    try {
+      Keyboard.dismiss();
+      await sendPasswordResetEmail(auth, trimmedEmail);
+      Alert.alert('Password Reset Sent', 'Check your email for the reset link.');
+    } catch (error: any) {
+      Alert.alert('Reset Error', error.message);
+    }
+  };
+
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
       <SafeAreaView style={styles.container}>
-        <View style={styles.topAccent} />
         <View style={styles.bottomAccent} />
 
         <AuthBrandHeader />
@@ -149,6 +170,7 @@ export default function Login() {
           onRoleChange={setRole}
           onLogin={handleLogin}
           onRegister={handleRegister}
+          onForgotPassword={handleForgotPassword}
           onModeChange={setMode}
         />
       </SafeAreaView>
@@ -159,28 +181,18 @@ export default function Login() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F7EFE3',
+    backgroundColor: '#F4EBDD',
     padding: 24,
     justifyContent: 'center',
-  },
-  topAccent: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 120,
-    backgroundColor: '#4A3728',
-    borderBottomLeftRadius: 36,
-    borderBottomRightRadius: 36,
   },
   bottomAccent: {
     position: 'absolute',
     left: -34,
     bottom: -34,
-    width: 130,
-    height: 130,
-    borderRadius: 65,
-    backgroundColor: '#D8B57A',
-    opacity: 0.28,
+    width: 118,
+    height: 118,
+    borderRadius: 59,
+    backgroundColor: '#C9974D',
+    opacity: 0.2,
   },
 });

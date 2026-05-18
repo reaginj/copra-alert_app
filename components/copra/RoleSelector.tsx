@@ -23,9 +23,9 @@ export default function RoleSelector({
         >
           <View style={[styles.iconBox, selectedRole === 'farmer' && styles.activeIconBox]}>
             <Ionicons
-              name="leaf-outline"
+              name="person-outline"
               size={26}
-              color={selectedRole === 'farmer' ? '#FFFFFF' : '#1E8A3A'}
+              color={selectedRole === 'farmer' ? '#FFFFFF' : '#277C3E'}
             />
           </View>
           <Text style={styles.roleTitle}>Farmer</Text>
@@ -40,7 +40,7 @@ export default function RoleSelector({
             <Ionicons
               name="business-outline"
               size={26}
-              color={selectedRole === 'warehouse' ? '#FFFFFF' : '#1E8A3A'}
+              color={selectedRole === 'warehouse' ? '#FFFFFF' : '#277C3E'}
             />
           </View>
           <Text style={styles.roleTitle}>Warehouse</Text>
@@ -56,7 +56,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     marginTop: 14,
     marginBottom: 12,
-    color: '#4A3728',
+    color: '#3E2A1E',
   },
   roleRow: {
     flexDirection: 'row',
@@ -67,14 +67,14 @@ const styles = StyleSheet.create({
     flex: 1,
     borderWidth: 1,
     borderColor: '#D7CEC2',
-    borderRadius: 16,
+    borderRadius: 12,
     padding: 14,
     alignItems: 'center',
-    backgroundColor: '#FFFCF8',
+    backgroundColor: '#FFFFFF',
   },
   activeRole: {
-    borderColor: '#1E8A3A',
-    backgroundColor: '#E8F3EA',
+    borderColor: '#277C3E',
+    backgroundColor: '#ECF4EC',
   },
   iconBox: {
     width: 44,
@@ -82,19 +82,19 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#EAF5E8',
+    backgroundColor: '#EEF6EF',
     borderWidth: 1,
-    borderColor: '#CFE5C9',
+    borderColor: '#D3E4D5',
   },
   activeIconBox: {
-    backgroundColor: '#1E8A3A',
-    borderColor: '#1E8A3A',
+    backgroundColor: '#277C3E',
+    borderColor: '#277C3E',
   },
   roleTitle: {
     fontWeight: '800',
     marginTop: 8,
     textAlign: 'center',
-    color: '#4A3728',
+    color: '#3E2A1E',
   },
   roleDesc: {
     fontSize: 12,
