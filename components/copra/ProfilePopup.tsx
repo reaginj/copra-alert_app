@@ -14,7 +14,16 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { signOut } from 'firebase/auth';
-import { doc, getDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  serverTimestamp,
+  updateDoc,
+  where,
+} from 'firebase/firestore';
 
 import ProfileInfoCard from '@/components/copra/ProfileInfoCard';
 import SettingRow from '@/components/copra/SettingRow';
@@ -35,6 +44,15 @@ type UserProfile = {
   isVerifiedOwner: boolean;
 };
 
+type OwnerVerificationRequest = {
+  uid: string;
+  displayName: string;
+  email: string;
+  contactNumber: string;
+  farmName: string;
+  farmLocation: string;
+};
+
 type ProfilePopupProps = {
   visible: boolean;
   role: ProfileRole;
@@ -47,6 +65,8 @@ export default function ProfilePopup({ visible, role, onClose }: ProfilePopupPro
   const [errorMessage, setErrorMessage] = useState('');
   const [isFarmEditorVisible, setIsFarmEditorVisible] = useState(false);
   const [isSavingFarmDetails, setIsSavingFarmDetails] = useState(false);
+  const [ownerRequests, setOwnerRequests] = useState<OwnerVerificationRequest[]>([]);
+  const [verifyingOwnerId, setVerifyingOwnerId] = useState<string | null>(null);
   const [farmNameDraft, setFarmNameDraft] = useState('');
   const [farmLocationDraft, setFarmLocationDraft] = useState('');
 
@@ -84,6 +104,33 @@ export default function ProfilePopup({ visible, role, onClose }: ProfilePopupPro
           ownerVerificationStatus: data.ownerVerificationStatus || 'not_requested',
           isVerifiedOwner: Boolean(data.isVerifiedOwner),
         });
+
+        if (role === 'warehouse') {
+          const ownerRequestSnap = await getDocs(
+            query(
+              collection(db, 'users'),
+              where('role', '==', 'farmer'),
+              where('ownerVerificationStatus', '==', 'pending')
+            )
+          );
+
+          setOwnerRequests(
+            ownerRequestSnap.docs.map((requestDoc) => {
+              const requestData = requestDoc.data();
+
+              return {
+                uid: requestDoc.id,
+                displayName: requestData.displayName || 'Farmer User',
+                email: requestData.email || '',
+                contactNumber: requestData.contactNumber || '',
+                farmName: requestData.farmName || '',
+                farmLocation: requestData.farmLocation || '',
+              };
+            })
+          );
+        } else {
+          setOwnerRequests([]);
+        }
       } catch (error: any) {
         setErrorMessage(error.message);
       } finally {
@@ -173,6 +220,36 @@ export default function ProfilePopup({ visible, role, onClose }: ProfilePopupPro
       Alert.alert('Farm Details', error.message || 'Unable to update farm details.');
     } finally {
       setIsSavingFarmDetails(false);
+    }
+  };
+
+  const handleOwnerVerification = async (
+    farmerId: string,
+    nextStatus: 'approved' | 'rejected'
+  ) => {
+    try {
+      setVerifyingOwnerId(farmerId);
+
+      await updateDoc(doc(db, 'users', farmerId), {
+        ownerVerificationStatus: nextStatus,
+        isVerifiedOwner: nextStatus === 'approved',
+        updatedAt: serverTimestamp(),
+      });
+
+      setOwnerRequests((currentRequests) =>
+        currentRequests.filter((request) => request.uid !== farmerId)
+      );
+
+      Alert.alert(
+        'Owner Verification',
+        nextStatus === 'approved'
+          ? 'Farmer owner verification approved.'
+          : 'Farmer owner verification rejected.'
+      );
+    } catch (error: any) {
+      Alert.alert('Owner Verification', error.message || 'Unable to update owner verification.');
+    } finally {
+      setVerifyingOwnerId(null);
     }
   };
 
@@ -348,6 +425,54 @@ export default function ProfilePopup({ visible, role, onClose }: ProfilePopupPro
                   </>
                 ) : null}
 
+                {!isFarmer ? (
+                  <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Farm Owner Verification</Text>
+
+                    {ownerRequests.length === 0 ? (
+                      <Text style={styles.emptyText}>No pending owner verification requests.</Text>
+                    ) : (
+                      ownerRequests.map((request) => (
+                        <View key={request.uid} style={styles.requestCard}>
+                          <Text style={styles.requestName}>{request.displayName}</Text>
+                          <Text style={styles.requestDetail}>{request.email || 'No email set'}</Text>
+                          <Text style={styles.requestDetail}>
+                            Contact: {request.contactNumber || 'Not set'}
+                          </Text>
+                          <Text style={styles.requestDetail}>
+                            Farm: {request.farmName || 'Not set'}
+                          </Text>
+                          <Text style={styles.requestDetail}>
+                            Location: {request.farmLocation || 'Not set'}
+                          </Text>
+
+                          <View style={styles.requestActions}>
+                            <TouchableOpacity
+                              style={[styles.ownerActionButton, styles.rejectButton]}
+                              activeOpacity={0.85}
+                              disabled={verifyingOwnerId === request.uid}
+                              onPress={() => handleOwnerVerification(request.uid, 'rejected')}
+                            >
+                              <Text style={styles.rejectButtonText}>Reject</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                              style={styles.ownerActionButton}
+                              activeOpacity={0.85}
+                              disabled={verifyingOwnerId === request.uid}
+                              onPress={() => handleOwnerVerification(request.uid, 'approved')}
+                            >
+                              <Text style={styles.ownerActionButtonText}>
+                                {verifyingOwnerId === request.uid ? 'Saving...' : 'Verify Owner'}
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      ))
+                    )}
+                  </View>
+                ) : null}
+
                 <View style={styles.section}>
                   <Text style={styles.sectionTitle}>
                     {isFarmer ? 'Farmer Settings' : 'Warehouse Settings'}
@@ -495,6 +620,56 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#4B3426',
     marginBottom: 12,
+  },
+  emptyText: {
+    fontSize: 13,
+    color: '#6F6258',
+    fontWeight: '700',
+  },
+  requestCard: {
+    backgroundColor: '#F7EFE3',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 12,
+  },
+  requestName: {
+    fontSize: 16,
+    color: '#3D2B22',
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  requestDetail: {
+    fontSize: 13,
+    color: '#6F6258',
+    fontWeight: '700',
+    marginBottom: 3,
+  },
+  requestActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 10,
+  },
+  ownerActionButton: {
+    flex: 1,
+    backgroundColor: '#1F5C43',
+    borderRadius: 12,
+    paddingVertical: 11,
+    alignItems: 'center',
+  },
+  ownerActionButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  rejectButton: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#A43A2F',
+  },
+  rejectButtonText: {
+    color: '#A43A2F',
+    fontSize: 13,
+    fontWeight: '800',
   },
   sectionHeaderRow: {
     flexDirection: 'row',
