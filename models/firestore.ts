@@ -34,7 +34,9 @@ export type MonitoringRecord = {
 
 export type WeightRecord = {
   weightId: string;
-  batchId: string;
+  batchId?: string;
+  deliveryId?: string;
+  sackId?: string;
   weight: number;
   recordedAt: Timestamp;
 };
@@ -52,11 +54,11 @@ export type AlertRecord = {
 export type DeliveryRecord = {
   deliveryId: string;
   displayCode?: string;
-  batchId: string;
+  batchId?: string;
   warehouseUserId: string;
   createdBy: string;
   updatedBy: string | null;
-  deliveryWeight: number;
+  deliveryWeight?: number;
   deliveryDate: Timestamp;
   deliveryStatus: DeliveryStatus;
 };

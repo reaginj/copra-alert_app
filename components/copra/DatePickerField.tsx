@@ -17,11 +17,35 @@ export default function DatePickerField({ value, onChange, mode, maximumDate, mi
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(value);
   const [androidStep, setAndroidStep] = useState<'date' | 'time'>('date');
+  const [iosStep, setIosStep] = useState<'date' | 'time'>('date');
 
   const openPicker = () => {
     setDraft(value);
     setAndroidStep('date');
+    setIosStep('date');
     setOpen(true);
+  };
+
+  const onIosDateChange = (_event: DateTimePickerEvent, selected?: Date) => {
+    if (!selected) return;
+    if (mode === 'date') {
+      setDraft(selected);
+      return;
+    }
+    setDraft((current) => {
+      const next = new Date(current);
+      next.setFullYear(selected.getFullYear(), selected.getMonth(), selected.getDate());
+      return next;
+    });
+  };
+
+  const onIosTimeChange = (_event: DateTimePickerEvent, selected?: Date) => {
+    if (!selected) return;
+    setDraft((current) => {
+      const next = new Date(current);
+      next.setHours(selected.getHours(), selected.getMinutes(), 0, 0);
+      return next;
+    });
   };
 
   const onAndroidChange = (event: DateTimePickerEvent, selected?: Date) => {
@@ -65,17 +89,25 @@ export default function DatePickerField({ value, onChange, mode, maximumDate, mi
             <TouchableOpacity style={styles.headerButton} onPress={() => { onChange(draft); setOpen(false); }}><Text style={styles.done}>Done</Text></TouchableOpacity>
           </View>
           <View style={styles.pickerContainer}>
+            {mode === 'datetime' ? <View style={styles.segmentedControl}>
+              <TouchableOpacity style={[styles.segment, iosStep === 'date' && styles.activeSegment]} onPress={() => setIosStep('date')}>
+                <Text style={[styles.segmentText, iosStep === 'date' && styles.activeSegmentText]}>Date</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.segment, iosStep === 'time' && styles.activeSegment]} onPress={() => setIosStep('time')}>
+                <Text style={[styles.segmentText, iosStep === 'time' && styles.activeSegmentText]}>Time</Text>
+              </TouchableOpacity>
+            </View> : null}
             <DateTimePicker
               value={draft}
-              mode={mode}
+              mode={mode === 'datetime' ? iosStep : 'date'}
               display={mode === 'date' ? 'inline' : 'spinner'}
-              maximumDate={maximumDate}
-              minimumDate={minimumDate}
+              maximumDate={mode === 'date' || iosStep === 'date' ? maximumDate : undefined}
+              minimumDate={mode === 'date' || iosStep === 'date' ? minimumDate : undefined}
               themeVariant="light"
               textColor={palette.ink}
               accentColor={palette.green}
               style={[styles.picker, mode === 'date' ? styles.calendarPicker : styles.timePicker]}
-              onChange={(_, selected) => selected && setDraft(selected)}
+              onChange={mode === 'datetime' && iosStep === 'time' ? onIosTimeChange : onIosDateChange}
             />
           </View>
         </View>
@@ -93,5 +125,10 @@ const styles = StyleSheet.create({
   headerButton: { minWidth: 62, minHeight: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 },
   title: { flex: 1, color: palette.ink, fontSize: 14, fontWeight: '800', textAlign: 'center' }, cancel: { color: palette.muted, fontSize: 14, fontWeight: '700' }, done: { color: palette.green, fontSize: 14, fontWeight: '900' },
   pickerContainer: { width: '100%', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8, paddingVertical: 10, backgroundColor: '#FFFDF8' },
+  segmentedControl: { width: '100%', maxWidth: 260, flexDirection: 'row', padding: 3, marginBottom: 4, borderRadius: 10, backgroundColor: '#E8ECE5' },
+  segment: { flex: 1, minHeight: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 8 },
+  activeSegment: { backgroundColor: palette.white },
+  segmentText: { color: palette.muted, fontSize: 13, fontWeight: '700' },
+  activeSegmentText: { color: palette.green },
   picker: { width: '100%', alignSelf: 'center' }, calendarPicker: { height: 340 }, timePicker: { height: 216 },
 });

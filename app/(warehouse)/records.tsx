@@ -12,7 +12,7 @@ export default function Records() {
   const { deliveries, loading, error } = useSystemData();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<(typeof filters)[number]>('All');
-  const list = useMemo(() => deliveries.filter((item) => (filter === 'All' || item.status === filter) && `${item.displayCode} ${item.batchDisplayCode} ${item.id} ${item.batchId} ${item.sourceFarm}`.toLowerCase().includes(search.trim().toLowerCase())), [deliveries, filter, search]);
+  const list = useMemo(() => deliveries.filter((item) => (filter === 'All' || item.status === filter) && `${item.displayCode} ${item.batchDisplayCode ?? ''} ${item.id} ${item.batchId ?? ''} ${item.sourceFarm}`.toLowerCase().includes(search.trim().toLowerCase())), [deliveries, filter, search]);
 
   return <View style={commonStyles.screen}>
     <SafeAreaView edges={['top']} style={styles.safe}><Header title="Delivery Records" subtitle="Search and filter recorded deliveries" profileRoute="/(warehouse)/profile" /></SafeAreaView>

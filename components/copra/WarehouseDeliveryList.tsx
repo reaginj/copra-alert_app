@@ -14,7 +14,7 @@ export default function WarehouseDeliveryList({ deliveries, onReceive }: Props) 
     <View style={styles.list}>{deliveries.map((item) => <Pressable key={item.id} onPress={() => setDetail(item)} accessibilityRole="button" accessibilityLabel={`View delivery ${item.displayCode}`}>
       <Card style={styles.card}>
         <View style={styles.top}><Text numberOfLines={1} ellipsizeMode="middle" style={styles.code}>{item.displayCode}</Text><StatusPill value={item.status} warehouse /></View>
-        <View style={styles.infoGrid}><Info label="Associated batch" value={item.batchDisplayCode} /><Info label="Recorded weight" value={`${item.weightKg} kg`} /></View>
+        <View style={styles.infoGrid}>{item.batchDisplayCode ? <Info label="Associated batch" value={item.batchDisplayCode} /> : null}<Info label="Recorded weight" value={item.legacyWeightKg != null ? `${item.legacyWeightKg} kg` : 'Not recorded'} /></View>
         <Info label="Delivery date" value={formatWarehouseDate(item.deliveryDate)} />
         <View style={styles.actions}><Text style={styles.detailsLink}>View details</Text>{onReceive && item.status === 'In Transit' ? <TouchableOpacity style={styles.receiveButton} onPress={(event) => { event.stopPropagation(); onReceive(item.id); }}><Text style={styles.receiveText}>Mark as received</Text></TouchableOpacity> : <Ionicons name="chevron-forward" size={19} color={palette.muted} />}</View>
       </Card>
@@ -25,9 +25,9 @@ export default function WarehouseDeliveryList({ deliveries, onReceive }: Props) 
         <View style={styles.handle} /><View style={styles.modalHeader}><View style={styles.modalCopy}><Text style={styles.modalTitle}>Delivery details</Text><Text numberOfLines={1} ellipsizeMode="middle" style={styles.modalCode}>{detail?.displayCode}</Text></View><TouchableOpacity style={styles.closeButton} onPress={() => setDetail(null)} accessibilityLabel="Close delivery details"><Ionicons name="close" size={22} color={palette.ink} /></TouchableOpacity></View>
         {detail ? <ScrollView style={styles.detailScroll} contentContainerStyle={styles.detailCard} showsVerticalScrollIndicator={false}>
           <View style={styles.detailStatus}><Text style={styles.detailLabel}>Status</Text><StatusPill value={detail.status} warehouse /></View>
-          <DetailRow label="Associated batch" value={detail.batchDisplayCode} />
-          {detail.batchId !== detail.batchDisplayCode ? <DetailRow label="Original batch reference" value={detail.batchId} /> : null}
-          <DetailRow label="Recorded weight" value={`${detail.weightKg} kg`} />
+          {detail.batchDisplayCode ? <DetailRow label="Associated batch" value={detail.batchDisplayCode} /> : null}
+          {detail.batchId && detail.batchDisplayCode && detail.batchId !== detail.batchDisplayCode ? <DetailRow label="Original batch reference" value={detail.batchId} /> : null}
+          {detail.legacyWeightKg != null ? <DetailRow label="Previously recorded weight" value={`${detail.legacyWeightKg} kg`} /> : <DetailRow label="Weight" value="No weight readings recorded yet" />}
           <DetailRow label="Delivery date" value={formatWarehouseDate(detail.deliveryDate)} />
           {isActual(detail.destination, 'Assigned warehouse') ? <DetailRow label="Warehouse destination" value={detail.destination} /> : null}
           {isActual(detail.sourceFarm, 'Assigned farm') ? <DetailRow label="Source farm" value={detail.sourceFarm} /> : null}

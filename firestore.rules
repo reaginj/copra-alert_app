@@ -84,14 +84,26 @@ service cloud.firestore {
     match /weight_records/{weightId} {
       allow read: if isFarmer();
       allow create: if isFarmer()
-                    && request.resource.data.keys().hasOnly(['weightId', 'batchId', 'weight', 'recordedAt'])
                     && request.resource.data.weightId == weightId
-                    && request.resource.data.batchId is string
                     && isNumber(request.resource.data.weight)
                     && request.resource.data.weight > 0
                     && request.resource.data.recordedAt is timestamp
-                    && existsAfter(/databases/$(database)/documents/copra_batches/$(request.resource.data.batchId))
-                    && getAfter(/databases/$(database)/documents/copra_batches/$(request.resource.data.batchId)).data.createdBy == request.auth.uid;
+                    && (
+                      (request.resource.data.keys().hasAll(['weightId', 'batchId', 'weight', 'recordedAt'])
+                        && request.resource.data.keys().hasOnly(['weightId', 'batchId', 'weight', 'recordedAt'])
+                        && request.resource.data.batchId is string
+                        && existsAfter(/databases/$(database)/documents/copra_batches/$(request.resource.data.batchId))
+                        && getAfter(/databases/$(database)/documents/copra_batches/$(request.resource.data.batchId)).data.createdBy == request.auth.uid)
+                      ||
+                      (request.resource.data.keys().hasAll(['weightId', 'deliveryId', 'sackId', 'weight', 'recordedAt'])
+                        && request.resource.data.keys().hasOnly(['weightId', 'deliveryId', 'sackId', 'weight', 'recordedAt'])
+                        && request.resource.data.deliveryId is string
+                        && request.resource.data.sackId is string
+                        && request.resource.data.sackId.matches('^[A-Za-z0-9_-]{1,80}$')
+                        && weightId == request.resource.data.deliveryId + '_' + request.resource.data.sackId
+                        && existsAfter(/databases/$(database)/documents/delivery_records/$(request.resource.data.deliveryId))
+                        && getAfter(/databases/$(database)/documents/delivery_records/$(request.resource.data.deliveryId)).data.createdBy == request.auth.uid)
+                    );
       allow update, delete: if false;
     }
 
@@ -116,14 +128,16 @@ service cloud.firestore {
                     ])
                     && request.resource.data.deliveryId == deliveryId
                     && validDisplayCode(request.resource.data.displayCode, 'D')
-                    && request.resource.data.batchId is string
                     && request.resource.data.createdBy == request.auth.uid
                     && request.resource.data.updatedBy == null
                     && request.resource.data.warehouseUserId is string
                     && get(userPath(request.resource.data.warehouseUserId)).data.role == 'warehouse'
-                    && get(/databases/$(database)/documents/copra_batches/$(request.resource.data.batchId)).data.createdBy == request.auth.uid
-                    && isNumber(request.resource.data.deliveryWeight)
-                    && request.resource.data.deliveryWeight > 0
+                    && (!request.resource.data.keys().hasAny(['batchId'])
+                        || (request.resource.data.batchId is string
+                            && get(/databases/$(database)/documents/copra_batches/$(request.resource.data.batchId)).data.createdBy == request.auth.uid))
+                    && (!request.resource.data.keys().hasAny(['deliveryWeight'])
+                        || (isNumber(request.resource.data.deliveryWeight)
+                            && request.resource.data.deliveryWeight > 0))
                     && request.resource.data.deliveryDate is timestamp
                     && request.resource.data.deliveryStatus == 'Scheduled'
                     && existsAfter(displayCodePath(request.resource.data.displayCode))

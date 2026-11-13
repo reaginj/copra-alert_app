@@ -85,7 +85,7 @@ export function subscribeWarehouseDeliveries(warehouseUid: string, next: Listene
   }, fail);
 }
 
-export async function createBatchRecord(input: { farmerUid: string; batchDate: Date; weightKg?: number }) {
+export async function createBatchRecord(input: { farmerUid: string; batchDate: Date }) {
   const batchId = makeId('BATCH');
   const batchRef = doc(db, 'copra_batches', batchId);
   const displayCode = await reserveDisplayCode('B', async (candidate) => {
@@ -94,16 +94,12 @@ export async function createBatchRecord(input: { farmerUid: string; batchDate: D
       if ((await transaction.get(reservationRef)).exists()) throw new DisplayCodeCollisionError();
       transaction.set(batchRef, { batchId, displayCode: candidate, createdBy: input.farmerUid, batchDate: Timestamp.fromDate(input.batchDate), batchStatus: 'active' });
       transaction.set(reservationRef, { displayCode: candidate, kind: 'batch', recordId: batchId, ownerUid: input.farmerUid, createdAt: serverTimestamp() });
-      if (input.weightKg !== undefined) {
-        const weightId = makeId('WEIGHT');
-        transaction.set(doc(db, 'weight_records', weightId), { weightId, batchId, weight: input.weightKg, recordedAt: serverTimestamp() });
-      }
     });
   });
   return { batchId, displayCode };
 }
 
-export async function createDeliveryRecord(input: { farmerUid: string; batchId: string; warehouseUserId: string; deliveryWeight: number; deliveryDate: Date }) {
+export async function createDeliveryRecord(input: { farmerUid: string; warehouseUserId: string; deliveryDate: Date }) {
   const deliveryId = makeId('DEL');
   const deliveryRef = doc(db, 'delivery_records', deliveryId);
   const displayCode = await reserveDisplayCode('D', async (candidate) => {
@@ -113,11 +109,9 @@ export async function createDeliveryRecord(input: { farmerUid: string; batchId: 
       transaction.set(deliveryRef, {
         deliveryId,
         displayCode: candidate,
-        batchId: input.batchId,
         warehouseUserId: input.warehouseUserId,
         createdBy: input.farmerUid,
         updatedBy: null,
-        deliveryWeight: input.deliveryWeight,
         deliveryDate: Timestamp.fromDate(input.deliveryDate),
         deliveryStatus: 'Scheduled',
       });
@@ -203,8 +197,10 @@ function parseMonitoring(item: QueryDocumentSnapshot<DocumentData>): MonitoringR
 
 function parseWeight(item: QueryDocumentSnapshot<DocumentData>): WeightRecord | null {
   const data = item.data(); const recordedAt = timestamp(data.recordedAt);
-  if (!recordedAt || typeof data.batchId !== 'string' || typeof data.weight !== 'number') return null;
-  return { weightId: stringValue(data.weightId, item.id), batchId: data.batchId, weight: data.weight, recordedAt };
+  const batchId = typeof data.batchId === 'string' ? data.batchId : undefined;
+  const deliveryId = typeof data.deliveryId === 'string' ? data.deliveryId : undefined;
+  if (!recordedAt || (!batchId && !deliveryId) || typeof data.weight !== 'number') return null;
+  return { weightId: stringValue(data.weightId, item.id), batchId, deliveryId, sackId: typeof data.sackId === 'string' ? data.sackId : undefined, weight: data.weight, recordedAt };
 }
 
 function parseAlert(item: QueryDocumentSnapshot<DocumentData>): AlertRecord | null {
@@ -216,6 +212,6 @@ function parseAlert(item: QueryDocumentSnapshot<DocumentData>): AlertRecord | nu
 function parseDelivery(item: QueryDocumentSnapshot<DocumentData>): DeliveryRecord | null {
   const data = item.data(); const deliveryDate = timestamp(data.deliveryDate);
   const validStatus = data.deliveryStatus === 'Scheduled' || data.deliveryStatus === 'In Transit' || data.deliveryStatus === 'Received' || data.deliveryStatus === 'Cancelled';
-  if (!deliveryDate || !validStatus || typeof data.batchId !== 'string' || typeof data.warehouseUserId !== 'string' || typeof data.createdBy !== 'string' || typeof data.deliveryWeight !== 'number') return null;
-  return { deliveryId: stringValue(data.deliveryId, item.id), displayCode: typeof data.displayCode === 'string' ? data.displayCode : undefined, batchId: data.batchId, warehouseUserId: data.warehouseUserId, createdBy: data.createdBy, updatedBy: typeof data.updatedBy === 'string' ? data.updatedBy : null, deliveryWeight: data.deliveryWeight, deliveryDate, deliveryStatus: data.deliveryStatus };
+  if (!deliveryDate || !validStatus || typeof data.warehouseUserId !== 'string' || typeof data.createdBy !== 'string') return null;
+  return { deliveryId: stringValue(data.deliveryId, item.id), displayCode: typeof data.displayCode === 'string' ? data.displayCode : undefined, batchId: typeof data.batchId === 'string' ? data.batchId : undefined, warehouseUserId: data.warehouseUserId, createdBy: data.createdBy, updatedBy: typeof data.updatedBy === 'string' ? data.updatedBy : null, deliveryWeight: typeof data.deliveryWeight === 'number' ? data.deliveryWeight : undefined, deliveryDate, deliveryStatus: data.deliveryStatus };
 }

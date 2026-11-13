@@ -33,6 +33,11 @@ yarn-error.*
 # local env files
 .env*.local
 
+# local administrative backups and credentials
+/backups/firestore-reset/
+/service-account*.json
+/firebase-admin-key*.json
+
 # typescript
 *.tsbuildinfo
 

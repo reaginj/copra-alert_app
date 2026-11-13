@@ -52,19 +52,21 @@ export type DryingAlert = { id: string; batchId: string; batchDisplayCode: strin
 export type Delivery = {
   id: string;
   displayCode: string;
-  batchId: string;
-  batchDisplayCode: string;
+  batchId?: string;
+  batchDisplayCode?: string;
   warehouseUserId: string;
   sourceFarm: string;
-  weightKg: number;
+  legacyWeightKg?: number;
+  totalWeightKg?: number;
+  totalSacks: number;
   destination: string;
   deliveryDate: string;
   status: DeliveryStatus;
   dryingStatus?: DryingStatus;
 };
 
-type NewBatch = { startedAt: Date; weightKg?: number };
-type NewDelivery = { batchId: string; warehouseUserId: string; weightKg: number; deliveryDate: Date };
+type NewBatch = { startedAt: Date };
+type NewDelivery = { warehouseUserId: string; deliveryDate: Date };
 
 type SystemData = {
   dataSource: 'firestore';
@@ -144,7 +146,11 @@ export function SystemDataProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const latestMonitoring = useMemo(() => latestByBatch(rawMonitoring, (item) => item.batchId, (item) => item.recordedAt.toMillis()), [rawMonitoring]);
-  const latestWeights = useMemo(() => latestByBatch(rawWeights, (item) => item.batchId, (item) => item.recordedAt.toMillis()), [rawWeights]);
+  const latestWeights = useMemo(() => latestByBatch(
+    rawWeights.filter((item): item is WeightRecord & { batchId: string } => Boolean(item.batchId)),
+    (item) => item.batchId,
+    (item) => item.recordedAt.toMillis(),
+  ), [rawWeights]);
   const warehouseNames = useMemo(() => new Map(warehouses.map((item) => [item.uid, item.warehouseName?.trim() || item.displayName?.trim() || item.email])), [warehouses]);
 
   const liveBatches = useMemo<Batch[]>(() => rawBatches.map((item) => {
@@ -195,15 +201,17 @@ export function SystemDataProvider({ children }: { children: ReactNode }) {
     id: item.deliveryId,
     displayCode: item.displayCode ?? item.deliveryId,
     batchId: item.batchId,
-    batchDisplayCode: batchDisplayCodes.get(item.batchId) ?? item.batchId,
+    batchDisplayCode: item.batchId ? batchDisplayCodes.get(item.batchId) ?? item.batchId : undefined,
     warehouseUserId: item.warehouseUserId,
     sourceFarm: account?.role === 'farmer' ? account.displayName?.trim() || account.email : 'Assigned farm',
-    weightKg: item.deliveryWeight,
+    legacyWeightKg: item.deliveryWeight,
+    totalWeightKg: sumDeliveryWeights(rawWeights, item.deliveryId),
+    totalSacks: rawWeights.filter((weight) => weight.deliveryId === item.deliveryId).length,
     destination: warehouseNames.get(item.warehouseUserId) || (account?.role === 'warehouse' && account.uid === item.warehouseUserId ? account.warehouseName?.trim() || account.displayName?.trim() || account.email : 'Assigned warehouse'),
     deliveryDate: item.deliveryDate.toDate().toISOString(),
     status: item.deliveryStatus,
-    dryingStatus: latestMonitoring.get(item.batchId)?.dryingStatus ?? undefined,
-  })), [account, batchDisplayCodes, latestMonitoring, rawDeliveries, warehouseNames]);
+    dryingStatus: item.batchId ? latestMonitoring.get(item.batchId)?.dryingStatus ?? undefined : undefined,
+  })), [account, batchDisplayCodes, latestMonitoring, rawDeliveries, rawWeights, warehouseNames]);
 
   const value = useMemo<SystemData>(() => ({
     dataSource: 'firestore', role: account?.role ?? null, loading, error, batches, readings, alerts, deliveries, warehouses,
@@ -222,7 +230,7 @@ export function SystemDataProvider({ children }: { children: ReactNode }) {
     createBatch: async (input) => {
       requireFarmer(account);
       if (Number.isNaN(input.startedAt.getTime()) || input.startedAt.getTime() > Date.now()) throw new Error('Select a valid start date that is not in the future.');
-      await createBatchRecord({ farmerUid: account.uid, batchDate: input.startedAt, weightKg: input.weightKg });
+      await createBatchRecord({ farmerUid: account.uid, batchDate: input.startedAt });
     },
     completeBatch: async (batchId) => {
       requireFarmer(account);
@@ -231,7 +239,7 @@ export function SystemDataProvider({ children }: { children: ReactNode }) {
     createDelivery: async (input) => {
       requireFarmer(account);
       if (Number.isNaN(input.deliveryDate.getTime())) throw new Error('Select a valid delivery date.');
-      await createDeliveryRecord({ farmerUid: account.uid, batchId: input.batchId, warehouseUserId: input.warehouseUserId, deliveryWeight: input.weightKg, deliveryDate: input.deliveryDate });
+      await createDeliveryRecord({ farmerUid: account.uid, warehouseUserId: input.warehouseUserId, deliveryDate: input.deliveryDate });
     },
     updateDeliveryStatus: async (id, status) => {
       if (!account) throw new Error('Sign in before updating a delivery.');
@@ -254,6 +262,11 @@ function latestByBatch<T>(items: T[], batchId: (item: T) => string, time: (item:
   const result = new Map<string, T>();
   items.forEach((item) => { const id = batchId(item); const current = result.get(id); if (!current || time(item) > time(current)) result.set(id, item); });
   return result;
+}
+
+function sumDeliveryWeights(records: WeightRecord[], deliveryId: string) {
+  const readings = records.filter((item) => item.deliveryId === deliveryId);
+  return readings.length ? readings.reduce((total, item) => total + item.weight, 0) : undefined;
 }
 
 function formatDuration(totalMinutes: number) {

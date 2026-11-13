@@ -86,14 +86,24 @@ test('display codes are immutable while legacy records remain updateable', async
   }));
 });
 
-test('farmer can atomically create a delivery code reservation', async () => {
+test('farmer can atomically create a delivery code reservation without a batch', async () => {
   const db = environment.authenticatedContext('farmer-1').firestore();
-  const delivery = { deliveryId: 'DEL-NEW', displayCode: 'D-4M8R2X', batchId: 'BATCH-1', warehouseUserId: 'warehouse-1', createdBy: 'farmer-1', updatedBy: null, deliveryWeight: 80, deliveryDate: Timestamp.now(), deliveryStatus: 'Scheduled' };
+  const delivery = { deliveryId: 'DEL-NEW', displayCode: 'D-4M8R2X', warehouseUserId: 'warehouse-1', createdBy: 'farmer-1', updatedBy: null, deliveryDate: Timestamp.now(), deliveryStatus: 'Scheduled' };
   const creation = writeBatch(db);
   creation.set(doc(db, 'delivery_records', 'DEL-NEW'), delivery);
   creation.set(doc(db, 'display_codes', 'D-4M8R2X'), { displayCode: 'D-4M8R2X', kind: 'delivery', recordId: 'DEL-NEW', ownerUid: 'farmer-1', createdAt: serverTimestamp() });
   await assertSucceeds(creation.commit());
   await assertFails(updateDoc(doc(db, 'delivery_records', 'DEL-NEW'), { displayCode: 'D-7K2P9Q' }));
+});
+
+test('delivery sack weights use an owned delivery and deterministic immutable id', async () => {
+  const farmer = environment.authenticatedContext('farmer-1').firestore();
+  const otherFarmer = environment.authenticatedContext('farmer-2').firestore();
+  const reading = { weightId: 'DEL-1_SACK-001', deliveryId: 'DEL-1', sackId: 'SACK-001', weight: 42.5, recordedAt: Timestamp.now() };
+  await assertSucceeds(setDoc(doc(farmer, 'weight_records', reading.weightId), reading));
+  await assertFails(setDoc(doc(farmer, 'weight_records', 'RANDOM-ID'), { ...reading, weightId: 'RANDOM-ID', sackId: 'SACK-002' }));
+  await assertFails(setDoc(doc(otherFarmer, 'weight_records', 'DEL-1_SACK-003'), { ...reading, weightId: 'DEL-1_SACK-003', sackId: 'SACK-003' }));
+  await assertFails(updateDoc(doc(farmer, 'weight_records', reading.weightId), { weight: 45 }));
 });
 
 test('owning farmer can complete an active batch with server completion metadata', async () => {
