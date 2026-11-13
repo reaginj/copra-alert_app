@@ -1,0 +1,29 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "copra_batches",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "createdBy", "order": "ASCENDING" },
+        { "fieldPath": "batchDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "delivery_records",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "createdBy", "order": "ASCENDING" },
+        { "fieldPath": "deliveryDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "delivery_records",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "warehouseUserId", "order": "ASCENDING" },
+        { "fieldPath": "deliveryDate", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

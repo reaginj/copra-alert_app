@@ -1,48 +1,37 @@
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-
-import RoleSelector, { AuthRole } from '@/components/copra/RoleSelector';
+import { useState } from 'react';
+import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 type AuthCardProps = {
-  mode: 'login' | 'register';
   email: string;
   password: string;
-  selectedRole: AuthRole;
   onEmailChange: (value: string) => void;
   onPasswordChange: (value: string) => void;
-  onRoleChange: (role: AuthRole) => void;
   onLogin: () => void;
-  onRegister: () => void;
   onForgotPassword: () => void;
-  onModeChange: (mode: 'login' | 'register') => void;
+  loading?: boolean;
+  error?: string;
 };
 
 export default function AuthCard({
-  mode,
   email,
   password,
-  selectedRole,
   onEmailChange,
   onPasswordChange,
-  onRoleChange,
   onLogin,
-  onRegister,
   onForgotPassword,
-  onModeChange,
+  loading = false,
+  error,
 }: AuthCardProps) {
-  const isRegisterMode = mode === 'register';
-
+  const [showPassword, setShowPassword] = useState(false);
   return (
     <View style={styles.card}>
-      <Text style={styles.welcome}>
-        {isRegisterMode ? 'Register' : 'Welcome Back!'}
-      </Text>
-      <Text style={styles.smallText}>
-        {isRegisterMode ? 'Register with basic credentials' : 'Login to continue'}
-      </Text>
+      <Text style={styles.welcome}>Welcome Back!</Text>
+      <Text style={styles.smallText}>Login to continue</Text>
 
       <TextInput
         style={styles.input}
-        placeholder="Email"
+        placeholder="Email or username"
         placeholderTextColor="#9A8D80"
         value={email}
         onChangeText={onEmailChange}
@@ -51,46 +40,28 @@ export default function AuthCard({
         returnKeyType="done"
       />
 
-      <TextInput
-        style={styles.input}
-        placeholder="Password"
-        placeholderTextColor="#9A8D80"
-        value={password}
-        onChangeText={onPasswordChange}
-        secureTextEntry
-        returnKeyType="done"
-      />
-
-      {!isRegisterMode && (
-        <TouchableOpacity
-          style={styles.forgotButton}
-          onPress={onForgotPassword}
-        >
-          <Text style={styles.forgotText}>Forgot password?</Text>
+      <View style={styles.passwordRow}>
+        <TextInput style={styles.passwordInput} placeholder="Password" placeholderTextColor="#9A8D80" value={password} onChangeText={onPasswordChange} secureTextEntry={!showPassword} returnKeyType="done" onSubmitEditing={onLogin} />
+        <TouchableOpacity accessibilityLabel={showPassword ? 'Hide password' : 'Show password'} onPress={() => setShowPassword((value) => !value)} style={styles.eyeButton}>
+          <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={21} color="#5D685F" />
         </TouchableOpacity>
-      )}
+      </View>
 
-      <RoleSelector
-        selectedRole={selectedRole}
-        onRoleChange={onRoleChange}
-      />
+      {error ? <Text style={styles.error}>{error}</Text> : null}
 
       <TouchableOpacity
-        style={styles.primaryButton}
-        onPress={isRegisterMode ? onRegister : onLogin}
+        style={styles.forgotButton}
+        onPress={onForgotPassword}
       >
-        <Text style={styles.primaryText}>
-          {isRegisterMode ? 'REGISTER' : 'LOGIN'}
-        </Text>
+        <Text style={styles.forgotText}>Forgot password?</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
-        style={styles.switchButton}
-        onPress={() => onModeChange(isRegisterMode ? 'login' : 'register')}
+        style={styles.primaryButton}
+        onPress={onLogin}
+        disabled={loading}
       >
-        <Text style={styles.switchButtonText}>
-          {isRegisterMode ? 'Already have an account? Login' : 'Register'}
-        </Text>
+        {loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryText}>LOGIN</Text>}
       </TouchableOpacity>
     </View>
   );
@@ -132,6 +103,10 @@ const styles = StyleSheet.create({
     color: '#3E2A1E',
     backgroundColor: '#FFFFFF',
   },
+  passwordRow: { borderWidth: 1, borderColor: '#D7CEC2', borderRadius: 10, marginBottom: 10, backgroundColor: '#FFFFFF', flexDirection: 'row', alignItems: 'center' },
+  passwordInput: { flex: 1, padding: 14, fontSize: 15, color: '#3E2A1E' },
+  eyeButton: { padding: 13 },
+  error: { color: '#A13D35', fontSize: 12, marginBottom: 4 },
   forgotButton: {
     alignSelf: 'flex-end',
     marginTop: -4,
@@ -151,20 +126,6 @@ const styles = StyleSheet.create({
   },
   primaryText: {
     color: '#FFFFFF',
-    fontWeight: '800',
-    textAlign: 'center',
-    fontSize: 16,
-  },
-  switchButton: {
-    borderWidth: 1,
-    borderColor: '#6B432C',
-    padding: 16,
-    borderRadius: 10,
-    marginTop: 10,
-    backgroundColor: '#F6EFE4',
-  },
-  switchButtonText: {
-    color: '#3E2A1E',
     fontWeight: '800',
     textAlign: 'center',
     fontSize: 16,

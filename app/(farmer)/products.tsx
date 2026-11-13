@@ -1,50 +1,85 @@
-import Header from '@/components/copra/Header';
-import BatchRecordingCard from '@/components/copra/BatchRecordingCard';
-import OutputComputationCard from '@/components/copra/OutputComputationCard';
-import ProductionHistoryCard from '@/components/copra/ProductionHistoryCard';
-import WeightMeasurementCard from '@/components/copra/WeightMeasurementCard';
-import { StyleSheet, View, ScrollView } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useMemo, useState } from 'react';
+import { Alert, InputAccessoryView, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import DatePickerField from '@/components/copra/DatePickerField';
+import Header from '@/components/copra/Header';
+import { Card, commonStyles, DataStateNotice, EmptyState, FilterPills, formatAppDate, PageActionButton, palette, SectionHeading, StatusPill } from '@/components/copra/ScopeUI';
+import { Batch, useSystemData } from '@/components/copra/systemData';
 
-export default function Product() {
-  return (
-    <View style={styles.screen}>
-      <SafeAreaView edges={['top']} style={styles.topSafeArea}>
-        <Header
-          title="Products"
-          subtitle="Drying Results and Copra Output"
-          profileRoute="/(farmer)/profile"
-        />
-      </SafeAreaView>
+const WEIGHT_ACCESSORY = 'batch-weight-accessory';
+const filters = ['All', 'Current', 'Previous'] as const;
+type BatchFilter = typeof filters[number];
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        <WeightMeasurementCard />
-        <OutputComputationCard />
-        <BatchRecordingCard />
-        <ProductionHistoryCard />
+export default function Batches() {
+  const { batches, createBatch, completeBatch, loading, error } = useSystemData();
+  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [completingId, setCompletingId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<Batch | null>(null);
+  const [filter, setFilter] = useState<BatchFilter>('All');
+  const [startedAt, setStartedAt] = useState(() => new Date());
+  const [weight, setWeight] = useState('');
+  const visibleBatches = useMemo(() => batches.filter((batch) => filter === 'All' || (filter === 'Current' ? batch.lifecycle === 'active' : batch.lifecycle === 'completed')), [batches, filter]);
 
-        <View style={styles.bottomSpace} />
-      </ScrollView>
-    </View>
-  );
+  const close = () => { Keyboard.dismiss(); setOpen(false); };
+  const save = async () => {
+    if (startedAt.getTime() > Date.now()) return Alert.alert('Invalid start time', 'The drying start time cannot be in the future.');
+    const parsed = weight.trim() ? Number(weight) : undefined;
+    if (parsed !== undefined && (!Number.isFinite(parsed) || parsed <= 0)) return Alert.alert('Invalid weight', 'Enter a valid weight in kilograms.');
+    try {
+      setSaving(true);
+      await createBatch({ startedAt, weightKg: parsed });
+      Keyboard.dismiss(); setOpen(false); setStartedAt(new Date()); setWeight('');
+      Alert.alert('Batch created', 'The new drying batch is ready for monitoring data.');
+    } catch (cause) {
+      Alert.alert('Unable to create batch', cause instanceof Error ? cause.message : 'Please try again.');
+    } finally { setSaving(false); }
+  };
+
+  const confirmCompletion = (batch: Batch) => {
+    if (completingId) return;
+    Alert.alert(
+      'Complete Drying Batch?',
+      'Have you physically checked the copra and confirmed that the drying process is finished? Completing this batch will move it to Previous Batches.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Complete Batch',
+          onPress: async () => {
+            try {
+              setCompletingId(batch.id);
+              await completeBatch(batch.id);
+              setDetail(null);
+              Alert.alert('Batch completed', `${batch.displayCode} was moved to Previous Batches.`);
+            } catch (cause) {
+              Alert.alert('Unable to complete batch', cause instanceof Error ? cause.message : 'Please try again.');
+            } finally {
+              setCompletingId(null);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  return <View style={commonStyles.screen}>
+    <SafeAreaView edges={['top']} style={styles.safe}><Header title="Drying Batches" subtitle="Current and previous batch records" profileRoute="/(farmer)/profile" /></SafeAreaView>
+    <ScrollView contentContainerStyle={commonStyles.content} showsVerticalScrollIndicator={false}>
+      <DataStateNotice loading={loading} error={error} />
+      <View style={styles.pageHead}><SectionHeading title="Batch Records" /><PageActionButton label="New Batch" onPress={() => { setStartedAt(new Date()); setOpen(true); }} /></View>
+      <FilterPills values={filters} selected={filter} onSelect={setFilter} />
+      {visibleBatches.length ? visibleBatches.map((batch) => { const current = batch.lifecycle === 'active'; const lifecycle = current ? 'ACTIVE' : 'COMPLETED'; return <TouchableOpacity key={batch.id} activeOpacity={0.76} onPress={() => setDetail(batch)}>
+        <Card style={styles.batchCard}><View style={styles.top}><View style={styles.idCopy}><Text numberOfLines={1} adjustsFontSizeToFit style={styles.id}>{batch.displayCode}</Text><View style={styles.lifecycleRow}><View style={[styles.lifecycleDot, !current && styles.lifecycleDotDone]} /><Text style={[styles.lifecycle, !current && styles.lifecycleDone]}>{lifecycle}</Text></View></View><StatusPill value={batch.status} /></View><View style={styles.compactGrid}><View style={styles.compactItem}><Text style={styles.compactLabel}>Started</Text><Text style={styles.compactValue}>{formatAppDate(batch.startedAt)}</Text></View><View style={styles.compactItem}><Text style={styles.compactLabel}>{current ? 'Status' : 'Completed'}</Text><Text style={styles.compactValue}>{current ? 'In progress' : batch.completedAt ? formatAppDate(batch.completedAt) : 'Not recorded'}</Text></View><Ionicons name="chevron-forward" size={17} color={palette.muted} /></View></Card>
+      </TouchableOpacity>; }) : <EmptyState icon="layers-outline" title={`No ${filter.toLowerCase()} batches`} message="No batch records match this filter." />}
+    </ScrollView>
+
+    <Modal visible={Boolean(detail)} transparent animationType="slide" onRequestClose={() => setDetail(null)}><Pressable style={styles.detailOverlay} onPress={() => setDetail(null)}><Pressable style={styles.detailSheet} onPress={() => undefined}><View style={styles.handle} /><View style={styles.modalHead}><View style={{ flex: 1 }}><Text style={styles.modalTitle}>Batch details</Text><Text style={styles.modalSubtitle}>{detail?.displayCode}</Text></View><TouchableOpacity style={styles.closeButton} onPress={() => setDetail(null)}><Ionicons name="close" size={21} color={palette.ink} /></TouchableOpacity></View>{detail ? <View style={styles.detailBody}><View style={styles.detailStatus}><Text style={styles.detailStatusLabel}>Computed condition</Text><StatusPill value={detail.status} /></View>{[['Lifecycle', detail.lifecycle === 'active' ? 'Active · In progress' : 'Completed'], ['Drying started', formatAppDate(detail.startedAt)], ...(detail.completedAt ? [['Completed', formatAppDate(detail.completedAt)]] : []), ['Recorded weight', detail.weightKg ? `${detail.weightKg} kg` : 'Not recorded'], ['Elapsed time', detail.elapsed], [detail.lifecycle === 'active' ? 'Estimated remaining' : 'Drying status', detail.remaining]].map(([label, value]) => <View key={label} style={commonStyles.detailRow}><Text style={commonStyles.detailLabel}>{label}</Text><Text style={commonStyles.detailValue}>{value}</Text></View>)}{detail.lifecycle === 'active' ? <TouchableOpacity style={[styles.completeButton, completingId === detail.id && styles.disabledButton]} disabled={Boolean(completingId)} activeOpacity={0.82} onPress={() => confirmCompletion(detail)}><Ionicons name="checkmark-circle-outline" size={19} color={palette.white} /><Text style={styles.completeButtonText}>{completingId === detail.id ? 'Completing…' : 'Complete Batch'}</Text></TouchableOpacity> : null}</View> : null}</Pressable></Pressable></Modal>
+
+    <Modal visible={open} animationType="slide" transparent onRequestClose={close}><KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}><TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}><View style={styles.dismissArea} /></TouchableWithoutFeedback><View style={styles.sheet}><View style={styles.handle} /><View style={styles.modalHead}><View><Text style={styles.modalTitle}>Create drying batch</Text><Text style={styles.modalSubtitle}>Add the essential batch details</Text></View><TouchableOpacity style={styles.closeButton} onPress={close}><Ionicons name="close" size={21} color={palette.ink} /></TouchableOpacity></View><ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}><View><Text style={commonStyles.label}>Drying start date and time</Text><DatePickerField value={startedAt} onChange={setStartedAt} mode="datetime" maximumDate={new Date()} /></View><View><Text style={commonStyles.label}>Recorded weight <Text style={styles.optional}>(kg, optional)</Text></Text><TextInput style={commonStyles.input} value={weight} onChangeText={setWeight} keyboardType="decimal-pad" placeholder="Enter recorded weight" placeholderTextColor="#949C95" inputAccessoryViewID={Platform.OS === 'ios' ? WEIGHT_ACCESSORY : undefined} /></View><TouchableOpacity style={commonStyles.primary} onPress={save} activeOpacity={0.82} disabled={saving}><Text style={commonStyles.primaryText}>{saving ? 'Saving…' : 'Create batch'}</Text></TouchableOpacity><TouchableOpacity style={styles.cancel} onPress={close}><Text style={styles.cancelText}>Cancel</Text></TouchableOpacity></ScrollView></View></KeyboardAvoidingView>{Platform.OS === 'ios' ? <InputAccessoryView nativeID={WEIGHT_ACCESSORY}><View style={styles.keyboardBar}><TouchableOpacity onPress={Keyboard.dismiss} style={styles.doneButton}><Text style={styles.doneText}>Done</Text></TouchableOpacity></View></InputAccessoryView> : null}</Modal>
+  </View>;
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: '#F6F8F4',
-  },
-
-  topSafeArea: {
-    backgroundColor: '#4A3728',
-  },
-
-  content: {
-    flex: 1,
-    padding: 20,
-  },
-
-  bottomSpace: {
-    height: 30,
-  },
+  safe: { backgroundColor: palette.greenDark }, pageHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }, pageCopy: { flex: 1 }, pageTitle: { color: palette.ink, fontSize: 20, fontWeight: '700' }, pageSubtitle: { color: palette.muted, fontSize: 12, marginTop: 3 }, batchCard: { padding: 13 }, top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 }, idCopy: { flex: 1 }, id: { fontWeight: '700', color: palette.ink, fontSize: 17 }, lifecycleRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4 }, lifecycleDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: palette.green }, lifecycleDotDone: { backgroundColor: palette.muted }, lifecycle: { color: palette.green, fontWeight: '700', fontSize: 9, letterSpacing: 0.4 }, lifecycleDone: { color: palette.muted }, compactGrid: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: palette.line }, compactItem: { flex: 1 }, compactLabel: { color: palette.muted, fontSize: 11, fontWeight: '500' }, compactValue: { color: palette.ink, fontSize: 12, fontWeight: '600', marginTop: 3, lineHeight: 16 }, detailOverlay: { flex: 1, backgroundColor: '#13251BA6', justifyContent: 'flex-end' }, detailSheet: { backgroundColor: palette.cream, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 8, paddingBottom: 28 }, detailBody: { marginHorizontal: 16, backgroundColor: palette.white, borderRadius: 16, padding: 15, borderWidth: 1, borderColor: palette.line }, detailStatus: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingBottom: 10, marginBottom: 5, borderBottomWidth: 1, borderBottomColor: palette.line }, detailStatusLabel: { color: palette.ink, fontSize: 13, fontWeight: '700' }, completeButton: { minHeight: 48, marginTop: 16, borderRadius: 12, backgroundColor: palette.green, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 16 }, completeButtonText: { color: palette.white, fontSize: 15, fontWeight: '700' }, disabledButton: { opacity: 0.55 }, overlay: { flex: 1, backgroundColor: '#13251BA6', justifyContent: 'flex-end' }, dismissArea: { flex: 1 }, sheet: { maxHeight: '82%', backgroundColor: palette.cream, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 8 }, handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#C8CCC5', alignSelf: 'center', marginBottom: 12 }, modalHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 15, gap: 12 }, modalTitle: { fontSize: 20, fontWeight: '700', color: palette.ink }, modalSubtitle: { color: palette.muted, fontSize: 12, marginTop: 3 }, closeButton: { width: 38, height: 38, borderRadius: 19, backgroundColor: palette.white, alignItems: 'center', justifyContent: 'center' }, form: { paddingHorizontal: 20, paddingBottom: 28, gap: 16 }, optional: { color: palette.muted, fontWeight: '500' }, cancel: { minHeight: 44, alignItems: 'center', justifyContent: 'center' }, cancelText: { color: palette.muted, fontWeight: '700' }, keyboardBar: { minHeight: 45, backgroundColor: '#F2F2F2', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#C7C7C7', alignItems: 'flex-end', justifyContent: 'center', paddingHorizontal: 16 }, doneButton: { paddingHorizontal: 8, paddingVertical: 9 }, doneText: { color: palette.green, fontSize: 16, fontWeight: '700' },
 });

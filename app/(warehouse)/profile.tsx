@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -14,16 +14,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { signOut } from 'firebase/auth';
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  query,
-  serverTimestamp,
-  updateDoc,
-  where,
-} from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 
 import ProfileInfoCard from '@/components/copra/ProfileInfoCard';
 import SettingRow from '@/components/copra/SettingRow';
@@ -37,22 +28,11 @@ type WarehouseProfileData = {
   warehouseLocation: string;
 };
 
-type OwnerVerificationRequest = {
-  uid: string;
-  displayName: string;
-  email: string;
-  contactNumber: string;
-  farmName: string;
-  farmLocation: string;
-};
-
 export default function WarehouseProfile() {
-  const popupScale = useRef(new Animated.Value(0.96)).current;
-  const popupOpacity = useRef(new Animated.Value(0)).current;
+  const [popupScale] = useState(() => new Animated.Value(0.96));
+  const [popupOpacity] = useState(() => new Animated.Value(0));
   const [profile, setProfile] = useState<WarehouseProfileData | null>(null);
-  const [ownerRequests, setOwnerRequests] = useState<OwnerVerificationRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [verifyingOwnerId, setVerifyingOwnerId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
@@ -99,28 +79,6 @@ export default function WarehouseProfile() {
           warehouseLocation: data.warehouseLocation || '',
         });
 
-        const ownerRequestSnap = await getDocs(
-          query(
-            collection(db, 'users'),
-            where('role', '==', 'farmer'),
-            where('ownerVerificationStatus', '==', 'pending')
-          )
-        );
-
-        setOwnerRequests(
-          ownerRequestSnap.docs.map((requestDoc) => {
-            const requestData = requestDoc.data();
-
-            return {
-              uid: requestDoc.id,
-              displayName: requestData.displayName || 'Farmer User',
-              email: requestData.email || '',
-              contactNumber: requestData.contactNumber || '',
-              farmName: requestData.farmName || '',
-              farmLocation: requestData.farmLocation || '',
-            };
-          })
-        );
       } catch (error: any) {
         setErrorMessage(error.message);
       } finally {
@@ -133,36 +91,6 @@ export default function WarehouseProfile() {
 
   const showPlaceholder = (label: string) => {
     Alert.alert(label, 'This setting will be available soon.');
-  };
-
-  const handleOwnerVerification = async (
-    farmerId: string,
-    nextStatus: 'approved' | 'rejected'
-  ) => {
-    try {
-      setVerifyingOwnerId(farmerId);
-
-      await updateDoc(doc(db, 'users', farmerId), {
-        ownerVerificationStatus: nextStatus,
-        isVerifiedOwner: nextStatus === 'approved',
-        updatedAt: serverTimestamp(),
-      });
-
-      setOwnerRequests((currentRequests) =>
-        currentRequests.filter((request) => request.uid !== farmerId)
-      );
-
-      Alert.alert(
-        'Owner Verification',
-        nextStatus === 'approved'
-          ? 'Farmer owner verification approved.'
-          : 'Farmer owner verification rejected.'
-      );
-    } catch (error: any) {
-      Alert.alert('Owner Verification', error.message || 'Unable to update owner verification.');
-    } finally {
-      setVerifyingOwnerId(null);
-    }
   };
 
   const handleLogout = async () => {
@@ -210,7 +138,7 @@ export default function WarehouseProfile() {
             ) : profile ? (
               <>
                 <ProfileInfoCard
-                  name={profile.displayName || 'Warehouse User'}
+                  name={profile.warehouseName || profile.displayName || 'Warehouse User'}
                   email={profile.email}
                   avatarIcon="business-outline"
                   items={[
@@ -221,51 +149,6 @@ export default function WarehouseProfile() {
                   ]}
                 />
 
-                <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>Farm Owner Verification</Text>
-
-                  {ownerRequests.length === 0 ? (
-                    <Text style={styles.emptyText}>No pending owner verification requests.</Text>
-                  ) : (
-                    ownerRequests.map((request) => (
-                      <View key={request.uid} style={styles.requestCard}>
-                        <Text style={styles.requestName}>{request.displayName}</Text>
-                        <Text style={styles.requestDetail}>{request.email || 'No email set'}</Text>
-                        <Text style={styles.requestDetail}>
-                          Contact: {request.contactNumber || 'Not set'}
-                        </Text>
-                        <Text style={styles.requestDetail}>
-                          Farm: {request.farmName || 'Not set'}
-                        </Text>
-                        <Text style={styles.requestDetail}>
-                          Location: {request.farmLocation || 'Not set'}
-                        </Text>
-
-                        <View style={styles.requestActions}>
-                          <TouchableOpacity
-                            style={[styles.verifyButton, styles.rejectButton]}
-                            activeOpacity={0.85}
-                            disabled={verifyingOwnerId === request.uid}
-                            onPress={() => handleOwnerVerification(request.uid, 'rejected')}
-                          >
-                            <Text style={styles.rejectButtonText}>Reject</Text>
-                          </TouchableOpacity>
-
-                          <TouchableOpacity
-                            style={styles.verifyButton}
-                            activeOpacity={0.85}
-                            disabled={verifyingOwnerId === request.uid}
-                            onPress={() => handleOwnerVerification(request.uid, 'approved')}
-                          >
-                            <Text style={styles.verifyButtonText}>
-                              {verifyingOwnerId === request.uid ? 'Saving...' : 'Verify Owner'}
-                            </Text>
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    ))
-                  )}
-                </View>
               </>
             ) : null}
 

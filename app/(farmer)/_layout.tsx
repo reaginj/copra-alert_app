@@ -1,8 +1,6 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 
 
 
@@ -13,27 +11,25 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: '#E6CB99',
-        tabBarInactiveTintColor: '#a8a399',
+        tabBarActiveTintColor: '#246B45',
+        tabBarInactiveTintColor: '#7D867F',
         headerShown: false,
-        tabBarButton: HapticTab,
         tabBarStyle: {
-          backgroundColor: '#4A3728',
-          paddingTop: 3,
+          backgroundColor: '#FFFFFF', paddingTop: 5, height: 66, borderTopColor: '#E3E4DA',
         },
       }}>
       <Tabs.Screen
         name="dashboard_farmer"
         options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
+          title: 'Dashboard',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color as string} />,
         }}
       />
       <Tabs.Screen
         name="monitor"
         options={{
-          title: 'Monitor',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="camera.fill" color={color} />,
+          title: 'Monitoring',
+          tabBarIcon: ({ color }) => <IconSymbol size={26} name="thermometer.medium" color={color as string} />,
         }}
         
       />
@@ -41,21 +37,21 @@ export default function TabLayout() {
         name="alerts"
         options={{
           title: 'Alerts',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="bell.fill" color={color} />,
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="bell.fill" color={color as string} />,
         }}
       />
       <Tabs.Screen
         name="products"
         options={{
-          title: 'Products',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="briefcase.fill" color={color} />,
+          title: 'Batches',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="briefcase.fill" color={color as string} />,
         }}
       />
       <Tabs.Screen
         name="supply"
         options={{
-          title: 'Supply Chain',
-          tabBarIcon: ({ color }) => <FontAwesome5 name="truck" size={24} color={color}/>,
+          title: 'Deliveries',
+          tabBarIcon: ({ color }) => <IconSymbol size={25} name="truck.box.fill" color={color as string} />,
         }}
       />  
       <Tabs.Screen

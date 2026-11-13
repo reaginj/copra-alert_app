@@ -1,14 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Animated,
-  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -16,13 +14,11 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { signOut } from 'firebase/auth';
-import { doc, getDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 
 import ProfileInfoCard from '@/components/copra/ProfileInfoCard';
 import SettingRow from '@/components/copra/SettingRow';
 import { auth, db } from '@/config/firebase';
-
-type OwnerVerificationStatus = 'not_requested' | 'pending' | 'approved' | 'rejected';
 
 type FarmerProfileData = {
   displayName: string;
@@ -30,19 +26,13 @@ type FarmerProfileData = {
   contactNumber: string;
   farmName: string;
   farmLocation: string;
-  ownerVerificationStatus: OwnerVerificationStatus;
-  isVerifiedOwner: boolean;
 };
 
 export default function FarmerProfile() {
-  const popupScale = useRef(new Animated.Value(0.96)).current;
-  const popupOpacity = useRef(new Animated.Value(0)).current;
+  const [popupScale] = useState(() => new Animated.Value(0.96));
+  const [popupOpacity] = useState(() => new Animated.Value(0));
   const [profile, setProfile] = useState<FarmerProfileData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSavingFarmDetails, setIsSavingFarmDetails] = useState(false);
-  const [isFarmEditorVisible, setIsFarmEditorVisible] = useState(false);
-  const [farmNameDraft, setFarmNameDraft] = useState('');
-  const [farmLocationDraft, setFarmLocationDraft] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
@@ -87,8 +77,6 @@ export default function FarmerProfile() {
           contactNumber: data.contactNumber || '',
           farmName: data.farmName || '',
           farmLocation: data.farmLocation || '',
-          ownerVerificationStatus: data.ownerVerificationStatus || 'not_requested',
-          isVerifiedOwner: Boolean(data.isVerifiedOwner),
         });
       } catch (error: any) {
         setErrorMessage(error.message);
@@ -100,115 +88,8 @@ export default function FarmerProfile() {
     loadProfile();
   }, []);
 
-  const getVerificationLabel = (status: OwnerVerificationStatus, isVerifiedOwner: boolean) => {
-    if (status === 'approved' && isVerifiedOwner) {
-      return 'Verified Farm Owner';
-    }
-
-    if (status === 'pending') {
-      return 'Pending Verification';
-    }
-
-    if (status === 'rejected') {
-      return 'Rejected';
-    }
-
-    return 'Not Requested';
-  };
-
-  const isVerifiedFarmOwner =
-    profile?.ownerVerificationStatus === 'approved' && profile.isVerifiedOwner === true;
-
   const showPlaceholder = (label: string) => {
     Alert.alert(label, 'This setting will be available soon.');
-  };
-
-  const openFarmEditor = () => {
-    if (!profile || !isVerifiedFarmOwner) {
-      Alert.alert('Farm Details', 'Only verified farm owners can edit farm details.');
-      return;
-    }
-
-    setFarmNameDraft(profile.farmName);
-    setFarmLocationDraft(profile.farmLocation);
-    setIsFarmEditorVisible(true);
-  };
-
-  const closeFarmEditor = () => {
-    if (isSavingFarmDetails) {
-      return;
-    }
-
-    setIsFarmEditorVisible(false);
-    setFarmNameDraft('');
-    setFarmLocationDraft('');
-  };
-
-  const handleSaveFarmDetails = async () => {
-    try {
-      if (!auth.currentUser || !profile) {
-        Alert.alert('Farm Details', 'No logged-in user found.');
-        return;
-      }
-
-      if (!isVerifiedFarmOwner) {
-        Alert.alert('Farm Details', 'Only verified farm owners can edit farm details.');
-        return;
-      }
-
-      const nextFarmName = farmNameDraft.trim();
-      const nextFarmLocation = farmLocationDraft.trim();
-
-      setIsSavingFarmDetails(true);
-
-      await updateDoc(doc(db, 'users', auth.currentUser.uid), {
-        farmName: nextFarmName,
-        farmLocation: nextFarmLocation,
-        updatedAt: serverTimestamp(),
-      });
-
-      setProfile({
-        ...profile,
-        farmName: nextFarmName,
-        farmLocation: nextFarmLocation,
-      });
-
-      setIsFarmEditorVisible(false);
-      Alert.alert('Farm Details', 'Farm details updated successfully.');
-    } catch (error: any) {
-      Alert.alert('Farm Details', error.message || 'Unable to update farm details.');
-    } finally {
-      setIsSavingFarmDetails(false);
-    }
-  };
-
-  const handleRequestOwnerVerification = async () => {
-    try {
-      if (!auth.currentUser) {
-        Alert.alert('Farm Owner Verification', 'No logged-in user found.');
-        return;
-      }
-
-      await updateDoc(doc(db, 'users', auth.currentUser.uid), {
-        ownerVerificationStatus: 'pending',
-        isVerifiedOwner: false,
-        updatedAt: serverTimestamp(),
-      });
-
-      setProfile((currentProfile) =>
-        currentProfile
-          ? {
-              ...currentProfile,
-              ownerVerificationStatus: 'pending',
-              isVerifiedOwner: false,
-            }
-          : currentProfile
-      );
-
-      Alert.alert('Farm Owner Verification', 'Farm owner verification request submitted.');
-    } catch (error: any) {
-      Alert.alert('Farm Owner Verification', error.message);
-    }
   };
 
   const handleLogout = async () => {
@@ -263,31 +144,11 @@ export default function FarmerProfile() {
                 items={[
                   { label: 'Role', value: 'Farmer', icon: 'leaf-outline' },
                   { label: 'Contact Number', value: profile.contactNumber || 'Not set', icon: 'call-outline' },
-                  {
-                    label: isVerifiedFarmOwner ? 'Owner Status' : 'Owner Verification',
-                    value: getVerificationLabel(
-                      profile.ownerVerificationStatus,
-                      profile.isVerifiedOwner
-                    ),
-                    icon: 'shield-checkmark-outline',
-                  },
                 ]}
               />
 
             <View style={styles.section}>
-              <View style={styles.sectionHeaderRow}>
-                <Text style={styles.sectionTitle}>Farm Details</Text>
-
-                {isVerifiedFarmOwner ? (
-                  <TouchableOpacity
-                    style={styles.editFarmButton}
-                    activeOpacity={0.85}
-                    onPress={openFarmEditor}
-                  >
-                    <Text style={styles.editFarmButtonText}>Edit Farm Details</Text>
-                  </TouchableOpacity>
-                ) : null}
-              </View>
+              <Text style={styles.sectionTitle}>Farm Details</Text>
 
               <View style={styles.farmDetailRow}>
                 <Text style={styles.farmDetailLabel}>Farm Name</Text>
@@ -299,11 +160,6 @@ export default function FarmerProfile() {
                 <Text style={styles.farmDetailValue}>{profile.farmLocation || 'Not set'}</Text>
               </View>
 
-              {!isVerifiedFarmOwner ? (
-                <Text style={styles.farmEditNote}>
-                  Only verified farm owners can edit farm details.
-                </Text>
-              ) : null}
             </View>
 
             <View style={styles.section}>
@@ -326,100 +182,12 @@ export default function FarmerProfile() {
               />
             </View>
 
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Farm Owner Verification</Text>
-
-              {isVerifiedFarmOwner ? (
-                <View style={styles.verifiedCard}>
-                  <Text style={styles.verifiedTitle}>Verified Farm Owner</Text>
-                  <Text style={styles.verifiedText}>
-                    Your farmer account is verified for owner-level farm records.
-                  </Text>
-                </View>
-              ) : null}
-
-              <View style={styles.statusRow}>
-                <Text style={styles.statusLabel}>Status</Text>
-                <Text style={styles.statusValue}>
-                  {getVerificationLabel(
-                    profile.ownerVerificationStatus,
-                    profile.isVerifiedOwner
-                  )}
-                </Text>
-              </View>
-
-              {profile.ownerVerificationStatus === 'not_requested' ||
-              profile.ownerVerificationStatus === 'rejected' ? (
-                <SettingRow
-                  icon="shield-checkmark-outline"
-                  label={
-                    profile.ownerVerificationStatus === 'rejected'
-                      ? 'Request Again'
-                      : 'Request Farm Owner Verification'
-                  }
-                  onPress={handleRequestOwnerVerification}
-                />
-              ) : null}
-            </View>
             </>
           ) : null}
           </ScrollView>
         </Animated.View>
       </SafeAreaView>
 
-      <Modal
-        visible={isFarmEditorVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={closeFarmEditor}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Edit Farm Details</Text>
-
-            <Text style={styles.inputLabel}>Farm Name</Text>
-            <TextInput
-              style={styles.input}
-              value={farmNameDraft}
-              onChangeText={setFarmNameDraft}
-              placeholder="Enter farm name"
-              placeholderTextColor="#8B837A"
-            />
-
-            <Text style={styles.inputLabel}>Farm Location</Text>
-            <TextInput
-              style={[styles.input, styles.multilineInput]}
-              value={farmLocationDraft}
-              onChangeText={setFarmLocationDraft}
-              placeholder="Enter farm location"
-              placeholderTextColor="#8B837A"
-              multiline
-            />
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.cancelButton}
-                activeOpacity={0.85}
-                onPress={closeFarmEditor}
-                disabled={isSavingFarmDetails}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.saveButton}
-                activeOpacity={0.85}
-                onPress={handleSaveFarmDetails}
-                disabled={isSavingFarmDetails}
-              >
-                <Text style={styles.saveButtonText}>
-                  {isSavingFarmDetails ? 'Saving...' : 'Save'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </Animated.View>
   );
 }

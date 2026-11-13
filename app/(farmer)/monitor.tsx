@@ -1,57 +1,81 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useMemo, useState } from 'react';
+import { LayoutChangeEvent, Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Header from '@/components/copra/Header';
-import MonitorDetails from '@/components/copra/monitorDetail';
-import LiveMonitorCard from '@/components/copra/LiveMonitorCard';
+import { Card, commonStyles, DataStateNotice, EmptyState, formatAppDate, palette, SectionTitle, SimulationBadge, StatusPill, TemperatureDisplay } from '@/components/copra/ScopeUI';
+import { Reading, useSystemData } from '@/components/copra/systemData';
+import { READING_FRESHNESS_MINUTES } from '@/config/monitoring';
 
+export default function Monitoring() {
+  const params = useLocalSearchParams<{ batchId?: string }>();
+  const { batches, readings, loading, error, monitoringMode, simulationAvailable, simulationScenario, simulationScenarios, setMonitoringMode, setSimulationScenario } = useSystemData();
+  const batchId = params.batchId && batches.some((item) => item.id === params.batchId) ? params.batchId : batches[0]?.id;
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [currentTime] = useState(() => Date.now());
+  const batch = batches.find((item) => item.id === batchId);
+  const history = useMemo(() => readings.filter((item) => item.batchId === batchId).slice().sort((a, b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime()), [batchId, readings]);
+  const latest = history.at(-1);
+  const latestTime = latest?.recordedAt ? new Date(latest.recordedAt) : null;
+  const validTimestamp = latestTime && !Number.isNaN(latestTime.getTime());
+  const ageMinutes = validTimestamp ? (currentTime - latestTime.getTime()) / 60000 : null;
+  const isRecent = ageMinutes !== null && ageMinutes >= 0 && ageMinutes <= READING_FRESHNESS_MINUTES;
+  const isOutdated = ageMinutes !== null && ageMinutes > READING_FRESHNESS_MINUTES;
 
-export default function MonitorScreen() {
+  return <View style={commonStyles.screen}>
+    <SafeAreaView edges={['top']} style={styles.safe}><Header title="Monitoring" subtitle="Computation-based drying status" profileRoute="/(farmer)/profile" /></SafeAreaView>
+    <ScrollView contentContainerStyle={commonStyles.content} showsVerticalScrollIndicator={false}>
+      <DataStateNotice loading={loading} error={error} />
+      {simulationAvailable ? <View style={styles.modePanel}>
+        <View style={styles.modeHeader}><View><Text style={styles.modeTitle}>Monitoring source</Text><Text style={styles.modeText}>Simulation stays on this device and is never saved to Firebase.</Text></View>{monitoringMode === 'simulation' ? <SimulationBadge /> : null}</View>
+        <View style={styles.modeSwitch}><TouchableOpacity onPress={() => setMonitoringMode('live')} style={[styles.modeButton, monitoringMode === 'live' && styles.modeButtonActive]}><Text style={[styles.modeButtonText, monitoringMode === 'live' && styles.modeButtonTextActive]}>Live</Text></TouchableOpacity><TouchableOpacity onPress={() => setMonitoringMode('simulation')} style={[styles.modeButton, monitoringMode === 'simulation' && styles.modeButtonActive]}><Text style={[styles.modeButtonText, monitoringMode === 'simulation' && styles.modeButtonTextActive]}>Simulation</Text></TouchableOpacity></View>
+        {monitoringMode === 'simulation' ? <><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scenarios}>{simulationScenarios.map((item) => <TouchableOpacity key={item.id} onPress={() => setSimulationScenario(item.id)} style={[styles.scenario, simulationScenario === item.id && styles.scenarioActive]}><Text style={[styles.scenarioText, simulationScenario === item.id && styles.scenarioTextActive]}>{item.label}</Text></TouchableOpacity>)}</ScrollView><Text style={styles.scenarioDescription}>{simulationScenarios.find((item) => item.id === simulationScenario)?.description}</Text></> : null}
+      </View> : null}
+      <TouchableOpacity style={styles.selector} activeOpacity={0.78} onPress={() => setPickerOpen(true)} accessibilityRole="button" accessibilityLabel="Select drying batch">
+        <View style={styles.selectorCopy}><View style={styles.selectorLabelRow}><Text style={styles.selectorLabel}>DRYING BATCH</Text>{batch ? <Text style={styles.lifecycle}>{batch.lifecycle === 'active' ? 'ACTIVE' : 'PREVIOUS'}</Text> : null}</View><Text numberOfLines={1} style={styles.selectorValue}>{batch?.displayCode ?? 'Choose a batch'}</Text></View>
+        <Ionicons name="chevron-down" size={19} color={palette.muted} />
+      </TouchableOpacity>
 
-  return (
-    <View style={styles.screen}>
-      <SafeAreaView edges={['top']} style={styles.topSafeArea}>
-        <Header
-          title="Monitor"
-          subtitle="Current Drying View"
-          profileRoute="/(farmer)/profile"
-        />
-      </SafeAreaView>
+      {!batch ? <EmptyState icon="radio-outline" title="Waiting for sensor data" message="No readings have been received. Create a batch when you are ready to connect the ESP32 monitoring device." /> : <>
+        {batch.lifecycle === 'completed' ? <View style={styles.completedNotice}><Ionicons name="checkmark-circle-outline" size={19} color={palette.green} /><View style={{ flex: 1 }}><Text style={styles.completedTitle}>Completed batch</Text><Text style={styles.completedText}>Showing historical monitoring records. This is not live monitoring.</Text></View></View> : null}
+        {batch.lifecycle === 'active' && isOutdated ? <View style={styles.stale}><Ionicons name="warning-outline" size={19} color={palette.warning} /><View style={{ flex: 1 }}><Text style={styles.staleTitle}>Reading may be outdated</Text><Text style={styles.staleText}>Sensor values may no longer reflect current conditions.</Text></View></View> : null}
+        {!latest ? <Card style={styles.sensorEmpty}><View style={styles.sensorEmptyIcon}><Ionicons name="radio-outline" size={24} color={palette.green} /></View><Text style={styles.sensorEmptyTitle}>Waiting for sensor data</Text><Text style={styles.sensorEmptyText}>No readings have been received for this batch. The ESP32 monitoring device may not be connected yet.</Text><View style={styles.unavailableGrid}><View style={styles.unavailableItem}><Text style={styles.summaryLabel}>Drying status</Text><Text style={styles.unavailableValue}>Unavailable</Text></View><View style={styles.unavailableItem}><Text style={styles.summaryLabel}>Estimated remaining</Text><Text style={styles.unavailableValue}>Unavailable</Text></View></View></Card> : <Card style={styles.monitorCard}>
+          <View style={styles.top}><View style={{ flex: 1, minWidth: 0 }}><Text style={styles.eyebrow}>{batch.lifecycle === 'active' ? 'LATEST TEMPERATURE' : 'LATEST RECORDED TEMPERATURE'}</Text><TemperatureDisplay value={latest?.temperature} size="monitoring" /></View><StatusPill value={batch.status} prominent /></View>
+          <View style={styles.divider} />
+          <View style={styles.summaryGrid}><View style={styles.summaryItem}><Text style={styles.summaryLabel}>Elapsed</Text><Text style={styles.summaryValue}>{batch.elapsed}</Text></View><View style={styles.summaryItem}><Text style={styles.summaryLabel}>{batch.lifecycle === 'active' ? 'Estimated remaining' : 'Completed'}</Text><Text style={styles.summaryValue}>{batch.lifecycle === 'active' ? batch.remaining : batch.completedAt ? formatAppDate(batch.completedAt) : 'Completion time unavailable'}</Text></View></View>
+          <View style={styles.freshnessRow}><View style={[styles.freshnessDot, { backgroundColor: batch.lifecycle === 'active' && isRecent ? palette.green : palette.muted }]} /><Text style={styles.receivedText}>{batch.lifecycle === 'active' ? 'Last received' : 'Last recorded'}: {validTimestamp ? formatAppDate(latest!.recordedAt) : 'Timestamp unavailable'}</Text></View>
+        </Card>}
+        <SectionTitle title="Temperature history" />
+        {history.length ? <Card><TemperatureLineChart readings={history} /></Card> : <Card style={styles.chartEmpty}><Ionicons name="analytics-outline" size={22} color={palette.muted} /><Text style={styles.chartEmptyText}>No temperature readings available</Text></Card>}
+      </>}
+    </ScrollView>
 
-      <View style={styles.content}>
-        <LiveMonitorCard />
-        <MonitorDetails />
-      </View>
-    </View>
-  );
+    <Modal visible={pickerOpen} transparent animationType="slide" onRequestClose={() => setPickerOpen(false)}>
+      <Pressable style={styles.overlay} onPress={() => setPickerOpen(false)}><Pressable style={styles.sheet} onPress={() => undefined}>
+        <View style={styles.sheetHandle} /><View style={styles.sheetHeader}><View><Text style={styles.sheetTitle}>Select a batch</Text><Text style={styles.sheetSubtitle}>Switch the monitoring record</Text></View><TouchableOpacity style={styles.closeButton} onPress={() => setPickerOpen(false)}><Ionicons name="close" size={21} color={palette.ink} /></TouchableOpacity></View>
+        <ScrollView style={styles.options} contentContainerStyle={styles.optionsContent}>{batches.map((item) => { const selected = item.id === batchId; return <TouchableOpacity key={item.id} style={[styles.option, selected && styles.optionSelected]} onPress={() => { router.setParams({ batchId: item.id }); setPickerOpen(false); }}><View style={[styles.radio, selected && styles.radioSelected]}>{selected ? <View style={styles.radioDot} /> : null}</View><View style={{ flex: 1 }}><View style={styles.optionTitleRow}><Text numberOfLines={1} style={[styles.optionId, selected && styles.optionIdSelected]}>{item.displayCode}</Text><Text style={styles.optionLifecycle}>{item.lifecycle === 'active' ? 'ACTIVE' : 'PREVIOUS'}</Text></View><Text style={styles.optionMeta}>{formatAppDate(item.startedAt)}</Text></View><StatusPill value={item.status} /></TouchableOpacity>; })}</ScrollView>
+      </Pressable></Pressable>
+    </Modal>
+  </View>;
+}
+
+function TemperatureLineChart({ readings }: { readings: Reading[] }) {
+  const [width, setWidth] = useState(0);
+  const values = readings.map((item) => item.temperature);
+  const rawMin = Math.min(...values); const rawMax = Math.max(...values);
+  const min = Math.floor(rawMin - 1); const max = Math.ceil(rawMax + 1); const range = Math.max(1, max - min);
+  const plotLeft = 34; const plotRight = 8; const plotTop = 14; const plotHeight = 112; const plotWidth = Math.max(1, width - plotLeft - plotRight);
+  const points = readings.map((item, index) => ({ x: plotLeft + (readings.length === 1 ? plotWidth / 2 : index / (readings.length - 1) * plotWidth), y: plotTop + (max - item.temperature) / range * plotHeight, item }));
+  const onLayout = (event: LayoutChangeEvent) => setWidth(event.nativeEvent.layout.width);
+  return <View style={styles.chart} onLayout={onLayout}>
+    <Text style={[styles.axisLabel, { top: plotTop - 7 }]}>{max}°</Text><Text style={[styles.axisLabel, { top: plotTop + plotHeight - 7 }]}>{min}°</Text>
+    {[0, 0.5, 1].map((ratio) => <View key={ratio} style={[styles.gridLine, { left: plotLeft, right: plotRight, top: plotTop + ratio * plotHeight }]} />)}
+    {width > 0 ? <>{points.slice(0, -1).map((point, index) => { const next = points[index + 1]; const dx = next.x - point.x; const dy = next.y - point.y; const length = Math.sqrt(dx * dx + dy * dy); const angle = Math.atan2(dy, dx) * 180 / Math.PI; return <View key={`line-${point.item.id}`} style={[styles.lineSegment, { width: length, left: (point.x + next.x) / 2 - length / 2, top: (point.y + next.y) / 2, transform: [{ rotate: `${angle}deg` }] }]} />; })}{points.map((point) => <View key={point.item.id} style={[styles.chartPoint, { left: point.x - 4, top: point.y - 4 }]} />)}</> : null}
+    {points.length ? <><Text numberOfLines={1} style={[styles.timeLabel, { left: plotLeft, textAlign: 'left' }]}>{new Date(points[0].item.recordedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</Text>{points.length > 2 ? <Text numberOfLines={1} style={[styles.timeLabel, { left: width / 2 - 30, textAlign: 'center' }]}>{new Date(points[Math.floor(points.length / 2)].item.recordedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</Text> : null}<Text numberOfLines={1} style={[styles.timeLabel, { right: plotRight, textAlign: 'right' }]}>{new Date(points.at(-1)!.item.recordedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</Text></> : null}
+  </View>;
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: '#f8f0e3',
-  },
-  topSafeArea: {
-    backgroundColor: '#4A3728',
-  },
-  header: {
-    backgroundColor: '#4A3728',
-    paddingHorizontal: 15,
-    paddingVertical: 15,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    textAlign: 'left',
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#F6F1B9',
-    textAlign: 'left',
-    paddingTop: 3
-  },
-  content: {
-    flex: 1,
-    padding: 13,
-  },
+  safe: { backgroundColor: palette.greenDark }, modePanel: { backgroundColor: palette.white, borderWidth: 1, borderColor: palette.line, borderRadius: 15, padding: 12, gap: 10 }, modeHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }, modeTitle: { color: palette.ink, fontSize: 13, fontWeight: '900' }, modeText: { color: palette.muted, fontSize: 10, lineHeight: 14, marginTop: 2, maxWidth: 230 }, modeSwitch: { flexDirection: 'row', backgroundColor: '#EDF1EC', borderRadius: 10, padding: 3 }, modeButton: { flex: 1, minHeight: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 8 }, modeButtonActive: { backgroundColor: palette.green }, modeButtonText: { color: palette.muted, fontSize: 12, fontWeight: '800' }, modeButtonTextActive: { color: palette.white }, scenarios: { gap: 7, paddingRight: 4 }, scenario: { borderWidth: 1, borderColor: palette.line, borderRadius: 16, backgroundColor: palette.white, paddingHorizontal: 10, paddingVertical: 7 }, scenarioActive: { backgroundColor: palette.paleGreen, borderColor: palette.green }, scenarioText: { color: palette.muted, fontSize: 9, fontWeight: '900' }, scenarioTextActive: { color: palette.greenDark }, scenarioDescription: { color: palette.muted, fontSize: 10, lineHeight: 15 }, selector: { minHeight: 62, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: palette.white, borderWidth: 1, borderColor: palette.line, borderRadius: 15, paddingHorizontal: 12, paddingVertical: 10, shadowColor: '#213126', shadowOpacity: 0.04, shadowRadius: 7, shadowOffset: { width: 0, height: 3 }, elevation: 2 }, selectorIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: palette.paleGreen, alignItems: 'center', justifyContent: 'center' }, selectorCopy: { flex: 1 }, selectorLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 7 }, selectorLabel: { color: palette.muted, fontSize: 9, fontWeight: '900', letterSpacing: 0.6 }, lifecycle: { color: palette.green, fontSize: 8, fontWeight: '900', backgroundColor: palette.paleGreen, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 }, selectorValue: { color: palette.ink, fontSize: 15, fontWeight: '900', marginTop: 2 }, stale: { flexDirection: 'row', gap: 9, alignItems: 'flex-start', backgroundColor: '#FFF0D5', borderRadius: 12, padding: 11 }, staleTitle: { fontWeight: '900', color: palette.warning, fontSize: 13 }, staleText: { color: '#715326', fontSize: 11, marginTop: 2 }, completedNotice: { flexDirection: 'row', gap: 9, alignItems: 'flex-start', backgroundColor: palette.paleGreen, borderRadius: 12, padding: 11 }, completedTitle: { fontWeight: '900', color: palette.greenDark, fontSize: 13 }, completedText: { color: palette.muted, fontSize: 11, marginTop: 2, lineHeight: 16 }, sensorEmpty: { padding: 18, alignItems: 'center' }, sensorEmptyIcon: { width: 48, height: 48, borderRadius: 15, backgroundColor: palette.paleGreen, alignItems: 'center', justifyContent: 'center', marginBottom: 10 }, sensorEmptyTitle: { color: palette.ink, fontSize: 16, fontWeight: '900' }, sensorEmptyText: { color: palette.muted, fontSize: 11, lineHeight: 17, textAlign: 'center', maxWidth: 290, marginTop: 5 }, unavailableGrid: { width: '100%', flexDirection: 'row', gap: 8, marginTop: 15 }, unavailableItem: { flex: 1, backgroundColor: '#F8FAF7', borderRadius: 11, padding: 10 }, unavailableValue: { color: palette.muted, fontWeight: '800', fontSize: 13, marginTop: 4 }, monitorCard: { padding: 15 }, top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }, eyebrow: { color: palette.muted, fontSize: 9, fontWeight: '900', letterSpacing: 0.8 }, temp: { fontSize: 33, fontWeight: '900', color: palette.greenDark, marginTop: 3, letterSpacing: -0.7 }, divider: { height: 1, backgroundColor: palette.line, marginVertical: 13 }, summaryGrid: { flexDirection: 'row', gap: 8 }, summaryItem: { flex: 1, backgroundColor: '#F8FAF7', borderRadius: 11, padding: 10 }, summaryLabel: { color: palette.muted, fontSize: 10, fontWeight: '700' }, summaryValue: { color: palette.ink, fontWeight: '900', fontSize: 14, marginTop: 4 }, freshnessRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 11 }, freshnessDot: { width: 7, height: 7, borderRadius: 4 }, receivedText: { color: palette.muted, fontSize: 10, flex: 1 }, chartEmpty: { minHeight: 86, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9 }, chartEmptyText: { color: palette.muted, fontSize: 12, fontWeight: '700' }, chart: { height: 158, position: 'relative' }, axisLabel: { position: 'absolute', left: 0, width: 30, color: palette.muted, fontSize: 9, textAlign: 'right' }, gridLine: { position: 'absolute', height: 1, backgroundColor: '#E8EAE5' }, lineSegment: { position: 'absolute', height: 2.5, borderRadius: 2, backgroundColor: palette.green }, chartPoint: { position: 'absolute', width: 8, height: 8, borderRadius: 4, backgroundColor: palette.white, borderWidth: 2.5, borderColor: palette.green }, timeLabel: { position: 'absolute', top: 136, width: 60, color: palette.muted, fontSize: 8 }, chartNote: { fontSize: 10, color: palette.muted, textAlign: 'center', marginTop: 3 }, overlay: { flex: 1, backgroundColor: '#13251BA6', justifyContent: 'flex-end' }, sheet: { maxHeight: '72%', backgroundColor: palette.cream, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 8, paddingBottom: 24 }, sheetHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#C8CCC5', alignSelf: 'center', marginBottom: 12 }, sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 12 }, sheetTitle: { color: palette.ink, fontSize: 20, fontWeight: '900' }, sheetSubtitle: { color: palette.muted, fontSize: 12, marginTop: 3 }, closeButton: { width: 38, height: 38, borderRadius: 19, backgroundColor: palette.white, alignItems: 'center', justifyContent: 'center' }, options: { flexGrow: 0 }, optionsContent: { paddingHorizontal: 16, gap: 8, paddingBottom: 8 }, option: { minHeight: 66, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: palette.white, borderWidth: 1, borderColor: palette.line, borderRadius: 14, padding: 12 }, optionSelected: { borderColor: palette.green, backgroundColor: '#F5FAF6' }, radio: { width: 19, height: 19, borderRadius: 10, borderWidth: 2, borderColor: '#BCC3BD', alignItems: 'center', justifyContent: 'center' }, radioSelected: { borderColor: palette.green }, radioDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: palette.green }, optionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 }, optionId: { color: palette.ink, fontWeight: '800', fontSize: 13, flexShrink: 1 }, optionIdSelected: { color: palette.greenDark }, optionLifecycle: { color: palette.muted, fontSize: 8, fontWeight: '900' }, optionMeta: { color: palette.muted, fontSize: 10, marginTop: 3 },
 });

@@ -1,138 +1,89 @@
-import { useState } from 'react';
-import { router } from 'expo-router';
+import { router } from "expo-router";
+import { useState } from "react";
 import {
   Alert,
   Keyboard,
   StyleSheet,
   TouchableWithoutFeedback,
   View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import AuthBrandHeader from '@/components/copra/AuthBrandHeader';
-import AuthCard from '@/components/copra/AuthCard';
-import { AuthRole } from '@/components/copra/RoleSelector';
-import { auth, db } from '@/config/firebase';
+import AuthBrandHeader from "@/components/copra/AuthBrandHeader";
+import AuthCard from "@/components/copra/AuthCard";
+import { auth, db } from "@/config/firebase";
 import {
-  createUserWithEmailAndPassword,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut,
-} from 'firebase/auth';
-import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
+} from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
 
-type Role = AuthRole;
-type AuthMode = 'login' | 'register';
+type Role = "farmer" | "warehouse";
 
 export default function Login() {
-  const [mode, setMode] = useState<AuthMode>('login');
-  const [role, setRole] = useState<Role>('farmer');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const goToRolePage = (userRole: Role) => {
-    if (userRole === 'farmer') {
-      router.replace('/(farmer)/dashboard_farmer' as any);
+    if (userRole === "farmer") {
+      router.replace("/(farmer)/dashboard_farmer" as any);
     } else {
-      router.replace('/(warehouse)/warehouse' as any);
-    }
-  };
-
-  const formatRole = (userRole: Role) => {
-    return userRole === 'farmer' ? 'Farmer' : 'Warehouse';
-  };
-
-  const handleRegister = async () => {
-    try {
-      Keyboard.dismiss();
-
-      const userCredential = await createUserWithEmailAndPassword(
-        auth,
-        email.trim(),
-        password
-      );
-
-      const { user } = userCredential;
-      const fallbackDisplayName = email.trim().split('@')[0];
-
-      if (role === 'farmer') {
-        await setDoc(doc(db, 'users', user.uid), {
-          uid: user.uid,
-          email: user.email,
-          role: 'farmer',
-          displayName: fallbackDisplayName,
-          contactNumber: '',
-          farmName: '',
-          farmLocation: '',
-          ownerVerificationStatus: 'not_requested',
-          isVerifiedOwner: false,
-          profileCompleted: false,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-      } else {
-        await setDoc(doc(db, 'users', user.uid), {
-          uid: user.uid,
-          email: user.email,
-          role: 'warehouse',
-          displayName: fallbackDisplayName,
-          contactNumber: '',
-          warehouseName: '',
-          warehouseLocation: '',
-          profileCompleted: false,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-      }
-
-      Alert.alert('Success', 'Account created!');
-      goToRolePage(role);
-    } catch (error: any) {
-      Alert.alert('Register Error', error.message);
+      router.replace("/(warehouse)/warehouse" as any);
     }
   };
 
   const handleLogin = async () => {
+    const identifier = email.trim();
+    if (!identifier || !password) {
+      setErrorMessage("Enter your email or username and password.");
+      return;
+    }
+    if (!identifier.includes("@")) {
+      setErrorMessage(
+        "Username lookup is not configured yet. Please use the email assigned to your account.",
+      );
+      return;
+    }
     try {
+      setLoading(true);
+      setErrorMessage("");
       Keyboard.dismiss();
 
       const userCredential = await signInWithEmailAndPassword(
         auth,
         email.trim(),
-        password
+        password,
       );
 
-      const userRef = doc(db, 'users', userCredential.user.uid);
+      const userRef = doc(db, "users", userCredential.user.uid);
       const userSnap = await getDoc(userRef);
 
       if (!userSnap.exists()) {
         await signOut(auth);
-        Alert.alert('Error', 'Account profile not found.');
+        Alert.alert("Error", "Account profile not found.");
         return;
       }
 
       const data = userSnap.data();
 
-      if (data.role !== 'farmer' && data.role !== 'warehouse') {
+      if (data.role !== "farmer" && data.role !== "warehouse") {
         await signOut(auth);
-        Alert.alert('Error', 'Invalid user role found.');
-        return;
-      }
-
-      if (role !== data.role) {
-        await signOut(auth);
-        Alert.alert(
-          'Role Mismatch',
-          `Role mismatch. This account is registered as ${formatRole(
-            data.role
-          )}. Please choose the correct role.`
-        );
+        Alert.alert("Error", "Invalid user role found.");
         return;
       }
 
       goToRolePage(data.role);
     } catch (error: any) {
-      Alert.alert('Login Error', error.message);
+      setErrorMessage(
+        error?.code === "auth/invalid-credential"
+          ? "The account details are incorrect."
+          : "Unable to sign in. Check your connection and try again.",
+      );
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -140,16 +91,22 @@ export default function Login() {
     const trimmedEmail = email.trim();
 
     if (!trimmedEmail) {
-      Alert.alert('Email Required', 'Enter your email address first, then tap forgot password.');
+      Alert.alert(
+        "Email Required",
+        "Enter your email address first, then tap forgot password.",
+      );
       return;
     }
 
     try {
       Keyboard.dismiss();
       await sendPasswordResetEmail(auth, trimmedEmail);
-      Alert.alert('Password Reset Sent', 'Check your email for the reset link.');
+      Alert.alert(
+        "Password Reset Sent",
+        "Check your email for the reset link.",
+      );
     } catch (error: any) {
-      Alert.alert('Reset Error', error.message);
+      Alert.alert("Reset Error", error.message);
     }
   };
 
@@ -161,17 +118,14 @@ export default function Login() {
         <AuthBrandHeader />
 
         <AuthCard
-          mode={mode}
           email={email}
           password={password}
-          selectedRole={role}
           onEmailChange={setEmail}
           onPasswordChange={setPassword}
-          onRoleChange={setRole}
           onLogin={handleLogin}
-          onRegister={handleRegister}
           onForgotPassword={handleForgotPassword}
-          onModeChange={setMode}
+          loading={loading}
+          error={errorMessage}
         />
       </SafeAreaView>
     </TouchableWithoutFeedback>
@@ -181,18 +135,18 @@ export default function Login() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F4EBDD',
+    backgroundColor: "#F4EBDD",
     padding: 24,
-    justifyContent: 'center',
+    justifyContent: "center",
   },
   bottomAccent: {
-    position: 'absolute',
+    position: "absolute",
     left: -34,
     bottom: -34,
     width: 118,
     height: 118,
     borderRadius: 59,
-    backgroundColor: '#C9974D',
+    backgroundColor: "#C9974D",
     opacity: 0.2,
   },
 });

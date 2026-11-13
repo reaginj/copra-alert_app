@@ -1,0 +1,180 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userPath(uid) {
+      return /databases/$(database)/documents/users/$(uid);
+    }
+
+    function isFarmer() {
+      return signedIn() && get(userPath(request.auth.uid)).data.role == 'farmer';
+    }
+
+    function isWarehouse() {
+      return signedIn() && get(userPath(request.auth.uid)).data.role == 'warehouse';
+    }
+
+    function validDryingStatus(value) {
+      return value == null || value == 'GOOD' || value == 'NOT GOOD' || value == 'BAD TIME';
+    }
+
+    function validDeliveryStatus(value) {
+      return value == 'Scheduled' || value == 'In Transit' || value == 'Received' || value == 'Cancelled';
+    }
+
+    function isNumber(value) {
+      return value is int || value is float;
+    }
+
+    function validDisplayCode(value, prefix) {
+      return value is string && value.matches('^' + prefix + '-[A-HJ-NP-Z2-9]{6}$');
+    }
+
+    function displayCodePath(code) {
+      return /databases/$(database)/documents/display_codes/$(code);
+    }
+
+    match /users/{uid} {
+      allow get: if signedIn() && (request.auth.uid == uid || (isFarmer() && resource.data.role == 'warehouse'));
+      allow list: if isFarmer() && resource.data.role == 'warehouse';
+      allow update: if signedIn()
+                    && request.auth.uid == uid
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName'])
+                    && request.resource.data.uid == resource.data.uid
+                    && request.resource.data.email == resource.data.email
+                    && request.resource.data.role == resource.data.role;
+      allow create, delete: if false;
+    }
+
+    match /copra_batches/{batchId} {
+      allow read: if isFarmer();
+      allow create: if isFarmer()
+                    && request.resource.data.keys().hasOnly(['batchId', 'displayCode', 'createdBy', 'batchDate', 'batchStatus'])
+                    && request.resource.data.batchId == batchId
+                    && validDisplayCode(request.resource.data.displayCode, 'B')
+                    && request.resource.data.createdBy == request.auth.uid
+                    && request.resource.data.batchDate is timestamp
+                    && request.resource.data.batchStatus == 'active'
+                    && existsAfter(displayCodePath(request.resource.data.displayCode))
+                    && getAfter(displayCodePath(request.resource.data.displayCode)).data.kind == 'batch'
+                    && getAfter(displayCodePath(request.resource.data.displayCode)).data.recordId == batchId
+                    && getAfter(displayCodePath(request.resource.data.displayCode)).data.ownerUid == request.auth.uid;
+      allow update: if isFarmer()
+                    && resource.data.createdBy == request.auth.uid
+                    && resource.data.batchStatus == 'active'
+                    && request.resource.data.batchStatus == 'completed'
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                      'batchStatus', 'completedAt', 'completedBy'
+                    ])
+                    && request.resource.data.completedBy == request.auth.uid
+                    && request.resource.data.completedAt is timestamp
+                    && request.resource.data.completedAt == request.time;
+      allow delete: if false;
+    }
+
+    match /monitoring_records/{monitoringId} {
+      allow read: if isFarmer();
+      allow write: if false;
+    }
+
+    match /weight_records/{weightId} {
+      allow read: if isFarmer();
+      allow create: if isFarmer()
+                    && request.resource.data.keys().hasOnly(['weightId', 'batchId', 'weight', 'recordedAt'])
+                    && request.resource.data.weightId == weightId
+                    && request.resource.data.batchId is string
+                    && isNumber(request.resource.data.weight)
+                    && request.resource.data.weight > 0
+                    && request.resource.data.recordedAt is timestamp
+                    && existsAfter(/databases/$(database)/documents/copra_batches/$(request.resource.data.batchId))
+                    && getAfter(/databases/$(database)/documents/copra_batches/$(request.resource.data.batchId)).data.createdBy == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /alert_records/{alertId} {
+      allow read: if isFarmer();
+      allow update: if isFarmer()
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead', 'readAt'])
+                    && request.resource.data.isRead == true
+                    && request.resource.data.readAt is timestamp;
+      allow create, delete: if false;
+    }
+
+    match /delivery_records/{deliveryId} {
+      allow read: if signedIn()
+                  && ((isFarmer() && resource.data.createdBy == request.auth.uid)
+                      || (isWarehouse() && resource.data.warehouseUserId == request.auth.uid));
+
+      allow create: if isFarmer()
+                    && request.resource.data.keys().hasOnly([
+                      'deliveryId', 'displayCode', 'batchId', 'warehouseUserId', 'createdBy', 'updatedBy',
+                      'deliveryWeight', 'deliveryDate', 'deliveryStatus'
+                    ])
+                    && request.resource.data.deliveryId == deliveryId
+                    && validDisplayCode(request.resource.data.displayCode, 'D')
+                    && request.resource.data.batchId is string
+                    && request.resource.data.createdBy == request.auth.uid
+                    && request.resource.data.updatedBy == null
+                    && request.resource.data.warehouseUserId is string
+                    && get(userPath(request.resource.data.warehouseUserId)).data.role == 'warehouse'
+                    && get(/databases/$(database)/documents/copra_batches/$(request.resource.data.batchId)).data.createdBy == request.auth.uid
+                    && isNumber(request.resource.data.deliveryWeight)
+                    && request.resource.data.deliveryWeight > 0
+                    && request.resource.data.deliveryDate is timestamp
+                    && request.resource.data.deliveryStatus == 'Scheduled'
+                    && existsAfter(displayCodePath(request.resource.data.displayCode))
+                    && getAfter(displayCodePath(request.resource.data.displayCode)).data.kind == 'delivery'
+                    && getAfter(displayCodePath(request.resource.data.displayCode)).data.recordId == deliveryId
+                    && getAfter(displayCodePath(request.resource.data.displayCode)).data.ownerUid == request.auth.uid;
+
+      allow update: if signedIn()
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deliveryStatus', 'updatedBy'])
+                    && request.resource.data.updatedBy == request.auth.uid
+                    && validDeliveryStatus(request.resource.data.deliveryStatus)
+                    && (
+                      (isFarmer()
+                        && resource.data.createdBy == request.auth.uid
+                        && resource.data.deliveryStatus == 'Scheduled'
+                        && (request.resource.data.deliveryStatus == 'In Transit' || request.resource.data.deliveryStatus == 'Cancelled'))
+                      ||
+                      (isWarehouse()
+                        && resource.data.warehouseUserId == request.auth.uid
+                        && resource.data.deliveryStatus == 'In Transit'
+                        && request.resource.data.deliveryStatus == 'Received')
+                    );
+      allow delete: if false;
+    }
+
+    match /display_codes/{displayCode} {
+      allow get: if isFarmer();
+      allow list: if false;
+      allow create: if isFarmer()
+                    && request.resource.data.keys().hasOnly([
+                      'displayCode', 'kind', 'recordId', 'ownerUid', 'createdAt'
+                    ])
+                    && request.resource.data.displayCode == displayCode
+                    && request.resource.data.ownerUid == request.auth.uid
+                    && request.resource.data.recordId is string
+                    && request.resource.data.createdAt is timestamp
+                    && request.resource.data.createdAt == request.time
+                    && (
+                      (request.resource.data.kind == 'batch'
+                        && validDisplayCode(displayCode, 'B')
+                        && existsAfter(/databases/$(database)/documents/copra_batches/$(request.resource.data.recordId))
+                        && getAfter(/databases/$(database)/documents/copra_batches/$(request.resource.data.recordId)).data.displayCode == displayCode
+                        && getAfter(/databases/$(database)/documents/copra_batches/$(request.resource.data.recordId)).data.createdBy == request.auth.uid)
+                      ||
+                      (request.resource.data.kind == 'delivery'
+                        && validDisplayCode(displayCode, 'D')
+                        && existsAfter(/databases/$(database)/documents/delivery_records/$(request.resource.data.recordId))
+                        && getAfter(/databases/$(database)/documents/delivery_records/$(request.resource.data.recordId)).data.displayCode == displayCode
+                        && getAfter(/databases/$(database)/documents/delivery_records/$(request.resource.data.recordId)).data.createdBy == request.auth.uid)
+                    );
+      allow update, delete: if false;
+    }
+  }
+}

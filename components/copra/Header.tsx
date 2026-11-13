@@ -26,10 +26,10 @@ export default function Header({
 
   return (
     <>
-      <View style={styles.container}>
+      <View style={[styles.container, profileRole === 'farmer' && styles.farmerContainer]}>
         <View style={styles.textContainer}>
-          <Text style={styles.title}>{title}</Text>
-          {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+          <Text style={[styles.title, profileRole === 'farmer' && styles.farmerTitle]}>{title}</Text>
+          {subtitle ? <Text style={[styles.subtitle, profileRole === 'farmer' && styles.farmerSubtitle]}>{subtitle}</Text> : null}
         </View>
 
         {profileRoute ? (
@@ -55,10 +55,14 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 16,
     paddingHorizontal: 20,
-    backgroundColor: '#4A3728',
+    backgroundColor: '#174B32',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  farmerContainer: {
+    paddingTop: 13,
+    paddingBottom: 13,
   },
 
   textContainer: {
@@ -71,12 +75,18 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     textAlign: 'left',
   },
+  farmerTitle: {
+    fontSize: 22,
+  },
 
   subtitle: {
     fontSize: 14,
-    color: '#F6F1B9',
+    color: '#DDEADD',
     textAlign: 'left',
     paddingTop: 3,
+  },
+  farmerSubtitle: {
+    fontSize: 13,
   },
 
   profileButton: {
