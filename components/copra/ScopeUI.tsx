@@ -44,10 +44,6 @@ export function TemperatureDisplay({ value, size = 'dashboard' }: { value?: numb
   return <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78} style={[styles.temperature, size === 'monitoring' && styles.temperatureMonitoring]}>{value === undefined ? '—' : `${value.toFixed(1)}°C`}</Text>;
 }
 
-export function DemoBanner() {
-  return <View style={styles.demo}><Ionicons name="flask-outline" size={14} color={palette.brown} /><Text style={styles.demoText}>Demo data · not live</Text></View>;
-}
-
 export function EmptyState({ icon = 'folder-open-outline', title, message }: { icon?: keyof typeof Ionicons.glyphMap; title: string; message: string }) {
   return <Card style={styles.empty}><Ionicons name={icon} size={30} color={palette.muted} /><Text style={styles.emptyTitle}>{title}</Text><Text style={styles.emptyText}>{message}</Text></Card>;
 }
@@ -55,10 +51,6 @@ export function EmptyState({ icon = 'folder-open-outline', title, message }: { i
 export function DataStateNotice({ loading, error }: { loading: boolean; error: string | null }) {
   if (!loading && !error) return null;
   return <View style={[styles.dataNotice, error && styles.dataNoticeError]}>{loading && !error ? <ActivityIndicator size="small" color={palette.green} /> : <Ionicons name="cloud-offline-outline" size={18} color={palette.danger} />}<Text style={[styles.dataNoticeText, error && { color: palette.danger }]}>{error || 'Loading records…'}</Text></View>;
-}
-
-export function SimulationBadge() {
-  return <View style={styles.simulationBadge}><Ionicons name="flask-outline" size={12} color="#7A4B00" /><Text style={styles.simulationBadgeText}>SIMULATION</Text></View>;
 }
 
 export function MetricCard({ icon, label, value, helper, emphasis = false }: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string; helper?: string; emphasis?: boolean }) {
@@ -74,7 +66,6 @@ const styles = StyleSheet.create({
   pillProminent: { borderWidth: 1, paddingHorizontal: 12, paddingVertical: 7 }, pillWarehouse: { paddingHorizontal: 11, paddingVertical: 7 }, dotProminent: { width: 8, height: 8 }, pillTextProminent: { fontSize: 13, fontWeight: '800' }, pillTextWarehouse: { fontSize: 14, fontWeight: '700' },
   pillPending: { backgroundColor: '#ECEDE9', borderColor: '#A8ADA8' },
   temperature: { color: palette.greenDark, fontSize: 42, fontWeight: '700', letterSpacing: -1.2, lineHeight: 49 }, temperatureMonitoring: { fontSize: 47, lineHeight: 54 },
-  demo: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#F1E6D5', borderRadius: 20, paddingHorizontal: 9, paddingVertical: 6 }, demoText: { color: palette.brown, fontSize: 11, fontWeight: '700' }, simulationBadge: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#FFE6A8', borderWidth: 1, borderColor: '#E0B957', borderRadius: 20, paddingHorizontal: 9, paddingVertical: 5 }, simulationBadgeText: { color: '#7A4B00', fontSize: 10, fontWeight: '900', letterSpacing: 0.5 },
   empty: { alignItems: 'center', paddingVertical: 25 }, emptyTitle: { color: palette.ink, fontWeight: '800', marginTop: 8 }, emptyText: { color: palette.muted, textAlign: 'center', marginTop: 4, fontSize: 13 },
   metric: { flex: 1, minWidth: '46%', padding: 12 }, metricIcon: { width: 30, height: 30, borderRadius: 9, backgroundColor: palette.paleGreen, alignItems: 'center', justifyContent: 'center', marginBottom: 8 }, metricLabel: { fontSize: 11, color: palette.muted, fontWeight: '700' }, metricValue: { fontSize: 18, color: palette.ink, fontWeight: '900', marginTop: 3, flexShrink: 1 }, helper: { color: palette.muted, fontSize: 10, marginTop: 3 },
   metricEmphasis: { borderColor: '#BCD6C4', backgroundColor: '#FBFDFB' }, metricValueEmphasis: { color: palette.greenDark, fontSize: 21 },

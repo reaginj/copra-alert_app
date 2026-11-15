@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Alert, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DatePickerField from '@/components/copra/DatePickerField';
@@ -14,6 +14,7 @@ export default function Batches() {
   const { batches, createBatch, completeBatch, loading, error } = useSystemData();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const submittingRef = useRef(false);
   const [completingId, setCompletingId] = useState<string | null>(null);
   const [detail, setDetail] = useState<Batch | null>(null);
   const [filter, setFilter] = useState<BatchFilter>('All');
@@ -29,16 +30,17 @@ export default function Batches() {
     setOpen(true);
   };
   const save = async () => {
-    if (saving || !startedAt) return;
+    if (submittingRef.current || !startedAt) return;
     if (startedAt.getTime() > Date.now()) return Alert.alert('Invalid start time', 'The drying start time cannot be in the future.');
     try {
+      submittingRef.current = true;
       setSaving(true);
       await createBatch({ startedAt });
       Keyboard.dismiss(); setOpen(false); setStartedAt(null); setLatestStartAt(null);
       Alert.alert('Batch created', 'The new drying batch is ready for monitoring data.');
     } catch (cause) {
       Alert.alert('Unable to create batch', cause instanceof Error ? cause.message : 'Please try again.');
-    } finally { setSaving(false); }
+    } finally { submittingRef.current = false; setSaving(false); }
   };
 
   const confirmCompletion = (batch: Batch) => {
@@ -78,7 +80,7 @@ export default function Batches() {
       </TouchableOpacity>; }) : <EmptyState icon="layers-outline" title={`No ${filter.toLowerCase()} batches`} message="No batch records match this filter." />}
     </ScrollView>
 
-    <Modal visible={Boolean(detail)} transparent animationType="slide" onRequestClose={() => setDetail(null)}><Pressable style={styles.detailOverlay} onPress={() => setDetail(null)}><Pressable style={styles.detailSheet} onPress={() => undefined}><View style={styles.handle} /><View style={styles.modalHead}><View style={{ flex: 1 }}><Text style={styles.modalTitle}>Batch details</Text><Text style={styles.modalSubtitle}>{detail?.displayCode}</Text></View><TouchableOpacity style={styles.closeButton} onPress={() => setDetail(null)}><Ionicons name="close" size={21} color={palette.ink} /></TouchableOpacity></View>{detail ? <View style={styles.detailBody}><View style={styles.detailStatus}><Text style={styles.detailStatusLabel}>Computed condition</Text><StatusPill value={detail.status} /></View>{[['Lifecycle', detail.lifecycle === 'active' ? 'Active · In progress' : 'Completed'], ['Drying started', formatAppDate(detail.startedAt)], ...(detail.completedAt ? [['Completed', formatAppDate(detail.completedAt)]] : []), ['Recorded weight', detail.weightKg ? `${detail.weightKg} kg` : 'Not recorded'], ['Elapsed time', detail.elapsed], [detail.lifecycle === 'active' ? 'Estimated remaining' : 'Drying status', detail.remaining]].map(([label, value]) => <View key={label} style={commonStyles.detailRow}><Text style={commonStyles.detailLabel}>{label}</Text><Text style={commonStyles.detailValue}>{value}</Text></View>)}{detail.lifecycle === 'active' ? <TouchableOpacity style={[styles.completeButton, completingId === detail.id && styles.disabledButton]} disabled={Boolean(completingId)} activeOpacity={0.82} onPress={() => confirmCompletion(detail)}><Ionicons name="checkmark-circle-outline" size={19} color={palette.white} /><Text style={styles.completeButtonText}>{completingId === detail.id ? 'Completing…' : 'Complete Batch'}</Text></TouchableOpacity> : null}</View> : null}</Pressable></Pressable></Modal>
+    <Modal visible={Boolean(detail)} transparent animationType="slide" onRequestClose={() => setDetail(null)}><Pressable style={styles.detailOverlay} onPress={() => setDetail(null)}><Pressable style={styles.detailSheet} onPress={() => undefined}><View style={styles.handle} /><View style={styles.modalHead}><View style={{ flex: 1 }}><Text style={styles.modalTitle}>Batch details</Text><Text style={styles.modalSubtitle}>{detail?.displayCode}</Text></View><TouchableOpacity style={styles.closeButton} onPress={() => setDetail(null)}><Ionicons name="close" size={21} color={palette.ink} /></TouchableOpacity></View>{detail ? <View style={styles.detailBody}><View style={styles.detailStatus}><Text style={styles.detailStatusLabel}>Computed condition</Text><StatusPill value={detail.status} /></View>{[['Lifecycle', detail.lifecycle === 'active' ? 'Active · In progress' : 'Completed'], ['Drying started', formatAppDate(detail.startedAt)], ...(detail.completedAt ? [['Completed', formatAppDate(detail.completedAt)]] : []), ['Elapsed time', detail.elapsed], [detail.lifecycle === 'active' ? 'Estimated remaining' : 'Drying status', detail.remaining]].map(([label, value]) => <View key={label} style={commonStyles.detailRow}><Text style={commonStyles.detailLabel}>{label}</Text><Text style={commonStyles.detailValue}>{value}</Text></View>)}{detail.lifecycle === 'active' ? <TouchableOpacity style={[styles.completeButton, completingId === detail.id && styles.disabledButton]} disabled={Boolean(completingId)} activeOpacity={0.82} onPress={() => confirmCompletion(detail)}><Ionicons name="checkmark-circle-outline" size={19} color={palette.white} /><Text style={styles.completeButtonText}>{completingId === detail.id ? 'Completing…' : 'Complete Batch'}</Text></TouchableOpacity> : null}</View> : null}</Pressable></Pressable></Modal>
 
     <Modal visible={open} animationType="slide" transparent onRequestClose={close}><KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}><TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}><View style={styles.dismissArea} /></TouchableWithoutFeedback><View style={styles.sheet}><View style={styles.handle} /><View style={styles.modalHead}><View><Text style={styles.modalTitle}>Create drying batch</Text><Text style={styles.modalSubtitle}>Add the drying start date and time</Text></View><TouchableOpacity style={styles.closeButton} onPress={close}><Ionicons name="close" size={21} color={palette.ink} /></TouchableOpacity></View><ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>{startedAt && latestStartAt ? <View><Text style={commonStyles.label}>Drying start date and time</Text><DatePickerField value={startedAt} onChange={setStartedAt} mode="datetime" maximumDate={latestStartAt} /></View> : null}<TouchableOpacity style={commonStyles.primary} onPress={save} activeOpacity={0.82} disabled={saving || !startedAt}><Text style={commonStyles.primaryText}>{saving ? 'Saving…' : 'Create batch'}</Text></TouchableOpacity><TouchableOpacity style={styles.cancel} onPress={close}><Text style={styles.cancelText}>Cancel</Text></TouchableOpacity></ScrollView></View></KeyboardAvoidingView></Modal>
   </View>;

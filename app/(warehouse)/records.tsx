@@ -20,7 +20,7 @@ export default function Records() {
       <DataStateNotice loading={loading} error={error} />
       <TextInput style={styles.search} value={search} onChangeText={setSearch} placeholder="Search delivery, batch, or farm" placeholderTextColor="#7B847D" autoCapitalize="none" returnKeyType="search" />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>{filters.map((item) => <TouchableOpacity key={item} onPress={() => setFilter(item)} style={[styles.filter, filter === item && styles.active]}><Text style={[styles.filterText, filter === item && styles.activeText]}>{item}</Text></TouchableOpacity>)}</ScrollView>
-      <WarehouseDeliveryList deliveries={list} />
+      {!loading && !error ? <WarehouseDeliveryList deliveries={list} /> : null}
     </ScrollView>
   </View>;
 }
