@@ -1,7 +1,6 @@
 import { onAuthStateChanged } from 'firebase/auth';
 import React, { createContext, ReactNode, useContext, useEffect, useMemo, useState } from 'react';
 import { auth } from '@/config/firebase';
-import { getSimulationScenario, SIMULATION_MODE_ENABLED, SIMULATION_SCENARIOS, type SimulationScenarioId } from '@/config/simulation';
 import type {
   AlertRecord,
   BatchStatus,
@@ -60,10 +59,23 @@ export type Delivery = {
   totalWeightKg?: number;
   totalSacks: number;
   destination: string;
+  createdAt?: string;
   deliveryDate: string;
   status: DeliveryStatus;
   dryingStatus?: DryingStatus;
+  sackWeights?: { deliveryId?: string; measurementId?: string; sackId: string; weightKg: number }[];
 };
+
+export function getDeliveryWeightSummary(delivery: Pick<Delivery, 'sackWeights' | 'totalSacks' | 'totalWeightKg'>) {
+  if (delivery.sackWeights?.length) {
+    return {
+      totalSacks: delivery.sackWeights.length,
+      totalWeightKg: delivery.sackWeights.reduce((sum, item) => sum + item.weightKg, 0),
+    };
+  }
+  if (delivery.totalSacks > 0 && delivery.totalWeightKg != null) return { totalSacks: delivery.totalSacks, totalWeightKg: delivery.totalWeightKg };
+  return null;
+}
 
 type NewBatch = { startedAt: Date };
 type NewDelivery = { warehouseUserId: string; deliveryDate: Date };
@@ -78,15 +90,9 @@ type SystemData = {
   alerts: DryingAlert[];
   deliveries: Delivery[];
   warehouses: WarehouseOption[];
-  monitoringMode: 'live' | 'simulation';
-  simulationAvailable: boolean;
-  simulationScenario: SimulationScenarioId;
-  simulationScenarios: typeof SIMULATION_SCENARIOS;
-  setMonitoringMode: (mode: 'live' | 'simulation') => void;
-  setSimulationScenario: (scenario: SimulationScenarioId) => void;
   createBatch: (value: NewBatch) => Promise<void>;
   completeBatch: (batchId: string) => Promise<void>;
-  createDelivery: (value: NewDelivery) => Promise<void>;
+  createDelivery: (value: NewDelivery) => Promise<string>;
   updateDeliveryStatus: (id: string, status: DeliveryStatus) => Promise<void>;
   markAlertRead: (id: string) => Promise<void>;
 };
@@ -103,9 +109,6 @@ export function SystemDataProvider({ children }: { children: ReactNode }) {
   const [warehouses, setWarehouses] = useState<WarehouseOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [monitoringMode, setMonitoringModeState] = useState<'live' | 'simulation'>('live');
-  const [simulationScenario, setSimulationScenario] = useState<SimulationScenarioId>('good');
-  const [simulationAlertRead, setSimulationAlertRead] = useState(false);
 
   useEffect(() => {
     let userUnsubscribe: (() => void) | undefined;
@@ -153,12 +156,12 @@ export function SystemDataProvider({ children }: { children: ReactNode }) {
   ), [rawWeights]);
   const warehouseNames = useMemo(() => new Map(warehouses.map((item) => [item.uid, item.warehouseName?.trim() || item.displayName?.trim() || item.email])), [warehouses]);
 
-  const liveBatches = useMemo<Batch[]>(() => rawBatches.map((item) => {
+  const batches = useMemo<Batch[]>(() => rawBatches.map((item) => {
     const monitoring = latestMonitoring.get(item.batchId);
     const weight = latestWeights.get(item.batchId);
     return {
       id: item.batchId,
-      displayCode: item.displayCode ?? item.batchId,
+      displayCode: item.batchNumber ? formatSequenceLabel('Batch', item.batchNumber) : item.displayCode ?? item.batchId,
       createdAt: item.batchDate.toDate().toISOString(),
       startedAt: item.batchDate.toDate().toISOString(),
       method: 'Unspecified',
@@ -171,62 +174,37 @@ export function SystemDataProvider({ children }: { children: ReactNode }) {
     };
   }), [latestMonitoring, latestWeights, rawBatches]);
 
-  const batchDisplayCodes = useMemo(() => new Map(rawBatches.map((item) => [item.batchId, item.displayCode ?? item.batchId])), [rawBatches]);
+  const batchDisplayCodes = useMemo(() => new Map(rawBatches.map((item) => [item.batchId, item.batchNumber ? formatSequenceLabel('Batch', item.batchNumber) : item.displayCode ?? item.batchId])), [rawBatches]);
+  const validBatchIds = useMemo(() => new Set(rawBatches.map((item) => item.batchId)), [rawBatches]);
+  const weightsByDelivery = useMemo(() => groupDeliveryWeights(rawWeights), [rawWeights]);
 
-  const simulationActive = SIMULATION_MODE_ENABLED && monitoringMode === 'simulation';
-  const scenario = getSimulationScenario(simulationScenario);
-  const simulatedBatchIds = useMemo(() => liveBatches.filter((item) => item.lifecycle === 'active').map((item) => item.id), [liveBatches]);
-  const primarySimulatedBatchId = simulatedBatchIds[0];
-  const batches = useMemo<Batch[]>(() => simulationActive
-    ? liveBatches.map((item) => item.lifecycle === 'active' ? {
-      ...item,
-      status: scenario.dryingStatus,
-      elapsed: formatDuration(scenario.elapsedMinutes),
-      remaining: formatDuration(scenario.estimatedMinutesRemaining),
-    } : item)
-    : liveBatches, [liveBatches, scenario, simulationActive]);
-
-  const liveReadings = useMemo<Reading[]>(() => rawMonitoring.map((item) => ({ id: item.monitoringId, batchId: item.batchId, temperature: item.temperature, recordedAt: item.recordedAt.toDate().toISOString() })), [rawMonitoring]);
-  const readings = useMemo<Reading[]>(() => simulationActive && simulatedBatchIds.length
-    ? [
-      ...liveReadings.filter((item) => !simulatedBatchIds.includes(item.batchId)),
-      ...simulatedBatchIds.flatMap((batchId) => makeSimulationReadings(batchId, scenario.temperatures)),
-    ]
-    : liveReadings, [liveReadings, scenario.temperatures, simulatedBatchIds, simulationActive]);
-  const liveAlerts = useMemo<DryingAlert[]>(() => rawAlerts.map((item) => ({ id: item.alertId, batchId: item.batchId, batchDisplayCode: batchDisplayCodes.get(item.batchId) ?? item.batchId, title: item.alertType, description: item.alertMessage, createdAt: item.alertDateTime.toDate().toISOString(), read: item.isRead })), [batchDisplayCodes, rawAlerts]);
-  const alerts = useMemo<DryingAlert[]>(() => simulationActive && primarySimulatedBatchId && scenario.inspectionRequired
-    ? [{ id: `SIM-INSPECTION-${primarySimulatedBatchId}`, batchId: primarySimulatedBatchId, batchDisplayCode: batchDisplayCodes.get(primarySimulatedBatchId) ?? primarySimulatedBatchId, title: 'Physical inspection required', description: 'The simulated estimated drying time has reached zero. Physically check the copra before completing this batch.', createdAt: new Date().toISOString(), read: simulationAlertRead }, ...liveAlerts]
-    : liveAlerts, [batchDisplayCodes, liveAlerts, primarySimulatedBatchId, scenario.inspectionRequired, simulationActive, simulationAlertRead]);
-  const deliveries = useMemo<Delivery[]>(() => rawDeliveries.map((item) => ({
-    id: item.deliveryId,
-    displayCode: item.displayCode ?? item.deliveryId,
-    batchId: item.batchId,
-    batchDisplayCode: item.batchId ? batchDisplayCodes.get(item.batchId) ?? item.batchId : undefined,
-    warehouseUserId: item.warehouseUserId,
-    sourceFarm: account?.role === 'farmer' ? account.displayName?.trim() || account.email : 'Assigned farm',
-    legacyWeightKg: item.deliveryWeight,
-    totalWeightKg: sumDeliveryWeights(rawWeights, item.deliveryId),
-    totalSacks: rawWeights.filter((weight) => weight.deliveryId === item.deliveryId).length,
-    destination: warehouseNames.get(item.warehouseUserId) || (account?.role === 'warehouse' && account.uid === item.warehouseUserId ? account.warehouseName?.trim() || account.displayName?.trim() || account.email : 'Assigned warehouse'),
-    deliveryDate: item.deliveryDate.toDate().toISOString(),
-    status: item.deliveryStatus,
-    dryingStatus: item.batchId ? latestMonitoring.get(item.batchId)?.dryingStatus ?? undefined : undefined,
-  })), [account, batchDisplayCodes, latestMonitoring, rawDeliveries, rawWeights, warehouseNames]);
+  const readings = useMemo<Reading[]>(() => rawMonitoring.filter((item) => validBatchIds.has(item.batchId)).map((item) => ({ id: item.monitoringId, batchId: item.batchId, temperature: item.temperature, recordedAt: item.recordedAt.toDate().toISOString() })), [rawMonitoring, validBatchIds]);
+  const alerts = useMemo<DryingAlert[]>(() => rawAlerts.filter((item) => validBatchIds.has(item.batchId)).map((item) => ({ id: item.alertId, batchId: item.batchId, batchDisplayCode: batchDisplayCodes.get(item.batchId)!, title: item.alertType, description: item.alertMessage, createdAt: item.alertDateTime.toDate().toISOString(), read: item.isRead })), [batchDisplayCodes, rawAlerts, validBatchIds]);
+  const deliveries = useMemo<Delivery[]>(() => rawDeliveries.map((item) => {
+    const weights = weightsByDelivery.get(item.deliveryId) ?? [];
+    const sackWeights = weights.map((record, index) => ({ deliveryId: item.deliveryId, measurementId: record.weightId, sackId: record.sackId?.trim() || `Sack ${String(index + 1).padStart(3, '0')}`, weightKg: record.weight }));
+    const summary = sackWeights.length ? { totalSacks: sackWeights.length, totalWeightKg: sackWeights.reduce((total, weight) => total + weight.weightKg, 0) } : null;
+    return {
+      id: item.deliveryId,
+      displayCode: item.deliveryNumber ? formatSequenceLabel('Delivery', item.deliveryNumber) : item.displayCode ?? item.deliveryId,
+      batchId: item.batchId,
+      batchDisplayCode: item.batchId ? batchDisplayCodes.get(item.batchId) ?? item.batchId : undefined,
+      warehouseUserId: item.warehouseUserId,
+      sourceFarm: account?.role === 'farmer' ? account.displayName?.trim() || account.email : 'Assigned farm',
+      legacyWeightKg: item.deliveryWeight,
+      totalWeightKg: summary?.totalWeightKg,
+      totalSacks: summary?.totalSacks ?? 0,
+      destination: warehouseNames.get(item.warehouseUserId) || (account?.role === 'warehouse' && account.uid === item.warehouseUserId ? account.warehouseName?.trim() || account.displayName?.trim() || account.email : 'Assigned warehouse'),
+      createdAt: item.createdAt?.toDate().toISOString(),
+      deliveryDate: item.deliveryDate.toDate().toISOString(),
+      status: item.deliveryStatus,
+      dryingStatus: item.batchId ? latestMonitoring.get(item.batchId)?.dryingStatus ?? undefined : undefined,
+      sackWeights,
+    };
+  }), [account, batchDisplayCodes, latestMonitoring, rawDeliveries, warehouseNames, weightsByDelivery]);
 
   const value = useMemo<SystemData>(() => ({
     dataSource: 'firestore', role: account?.role ?? null, loading, error, batches, readings, alerts, deliveries, warehouses,
-    monitoringMode: simulationActive ? 'simulation' : 'live',
-    simulationAvailable: SIMULATION_MODE_ENABLED,
-    simulationScenario,
-    simulationScenarios: SIMULATION_SCENARIOS,
-    setMonitoringMode: (mode) => {
-      setMonitoringModeState(SIMULATION_MODE_ENABLED ? mode : 'live');
-      setSimulationAlertRead(false);
-    },
-    setSimulationScenario: (nextScenario) => {
-      setSimulationScenario(nextScenario);
-      setSimulationAlertRead(false);
-    },
     createBatch: async (input) => {
       requireFarmer(account);
       if (Number.isNaN(input.startedAt.getTime()) || input.startedAt.getTime() > Date.now()) throw new Error('Select a valid start date that is not in the future.');
@@ -239,7 +217,8 @@ export function SystemDataProvider({ children }: { children: ReactNode }) {
     createDelivery: async (input) => {
       requireFarmer(account);
       if (Number.isNaN(input.deliveryDate.getTime())) throw new Error('Select a valid delivery date.');
-      await createDeliveryRecord({ farmerUid: account.uid, warehouseUserId: input.warehouseUserId, deliveryDate: input.deliveryDate });
+      const created = await createDeliveryRecord({ farmerUid: account.uid, warehouseUserId: input.warehouseUserId, deliveryDate: input.deliveryDate });
+      return created.deliveryId;
     },
     updateDeliveryStatus: async (id, status) => {
       if (!account) throw new Error('Sign in before updating a delivery.');
@@ -247,13 +226,9 @@ export function SystemDataProvider({ children }: { children: ReactNode }) {
     },
     markAlertRead: async (id) => {
       requireFarmer(account);
-      if (simulationActive && id.startsWith('SIM-INSPECTION-')) {
-        setSimulationAlertRead(true);
-        return;
-      }
       await markAlertReadRecord(id, account.uid);
     },
-  }), [account, alerts, batches, deliveries, error, loading, readings, simulationActive, simulationScenario, warehouses]);
+  }), [account, alerts, batches, deliveries, error, loading, readings, warehouses]);
 
   return <Context.Provider value={value}>{children}</Context.Provider>;
 }
@@ -264,27 +239,34 @@ function latestByBatch<T>(items: T[], batchId: (item: T) => string, time: (item:
   return result;
 }
 
-function sumDeliveryWeights(records: WeightRecord[], deliveryId: string) {
-  const readings = records.filter((item) => item.deliveryId === deliveryId);
-  return readings.length ? readings.reduce((total, item) => total + item.weight, 0) : undefined;
+function groupDeliveryWeights(records: WeightRecord[]) {
+  const grouped = new Map<string, Map<string, WeightRecord>>();
+  records.forEach((record) => {
+    if (!record.deliveryId) return;
+    const delivery = grouped.get(record.deliveryId) ?? new Map<string, WeightRecord>();
+    const key = record.sackId?.trim() || record.weightId;
+    const existing = delivery.get(key);
+    if (!existing || record.recordedAt.toMillis() > existing.recordedAt.toMillis()) delivery.set(key, record);
+    grouped.set(record.deliveryId, delivery);
+  });
+  return new Map([...grouped].map(([deliveryId, readings]) => [deliveryId, [...readings.values()]]));
+}
+
+function formatSequenceLabel(prefix: 'Batch' | 'Delivery', value: number) {
+  return `${prefix} ${String(value).padStart(3, '0')}`;
 }
 
 function formatDuration(totalMinutes: number) {
   const minutes = Math.max(0, Math.round(totalMinutes));
+  const days = Math.floor(minutes / 1440);
+  if (days) {
+    const hours = Math.floor((minutes % 1440) / 60);
+    return hours ? `${days} day${days === 1 ? '' : 's'}, ${hours} hour${hours === 1 ? '' : 's'}` : `${days} day${days === 1 ? '' : 's'}`;
+  }
   const hours = Math.floor(minutes / 60); const remainder = minutes % 60;
   if (!hours) return `${remainder} min`;
   if (!remainder) return `${hours} hr`;
   return `${hours} hr ${remainder} min`;
-}
-
-function makeSimulationReadings(batchId: string, temperatures: readonly number[]): Reading[] {
-  const end = Date.now();
-  return temperatures.map((temperature, index) => ({
-    id: `SIM-${batchId}-${index}`,
-    batchId,
-    temperature,
-    recordedAt: new Date(end - (temperatures.length - 1 - index) * 15 * 60_000).toISOString(),
-  }));
 }
 
 function requireFarmer(account: UserRecord | null): asserts account is UserRecord & { role: 'farmer' } {

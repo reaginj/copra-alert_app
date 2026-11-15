@@ -16,6 +16,7 @@ export type UserRecord = {
 export type CopraBatchRecord = {
   batchId: string;
   displayCode?: string;
+  batchNumber?: number;
   createdBy: string;
   batchDate: Timestamp;
   batchStatus: BatchStatus;
@@ -54,11 +55,13 @@ export type AlertRecord = {
 export type DeliveryRecord = {
   deliveryId: string;
   displayCode?: string;
+  deliveryNumber?: number;
   batchId?: string;
   warehouseUserId: string;
   createdBy: string;
   updatedBy: string | null;
   deliveryWeight?: number;
+  createdAt?: Timestamp;
   deliveryDate: Timestamp;
   deliveryStatus: DeliveryStatus;
 };

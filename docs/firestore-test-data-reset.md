@@ -8,7 +8,7 @@ This utility targets project `copra-alert` and only these collections:
 - `alert_records`
 - `delivery_records`
 
-It never deletes `users`, Firebase Authentication accounts, `display_codes`, Security Rules, or indexes. `display_codes` is intentionally retained because the app uses it as an immutable reservation ledger for batch and delivery display codes. Old codes therefore remain reserved after a test-data reset.
+It never deletes `users`, Firebase Authentication accounts, `display_codes`, `sequence_counters`, Security Rules, or indexes. `display_codes` is retained as the immutable ledger for legacy random codes. `sequence_counters` is retained so a reset cannot reuse previously issued batch or delivery numbers.
 
 ## 1. Configure temporary administrative credentials
 
@@ -34,6 +34,7 @@ The default mode is read-only. It prints every target document ID and these coun
 - preserved `users` documents;
 - preserved Firebase Authentication accounts;
 - preserved `display_codes` documents.
+- preserved `sequence_counters` documents.
 
 Review this output before continuing. No backup or deletion occurs in dry-run mode.
 
@@ -71,7 +72,8 @@ In Firebase Console, independently verify:
 2. The `users` collection still contains the Farmer and Warehouse profile documents.
 3. Authentication → Users still contains the existing login accounts.
 4. `display_codes` still exists and was not modified.
-5. Firestore Rules and Indexes remain unchanged.
+5. `sequence_counters` still contains the batch and delivery sequence state.
+6. Firestore Rules and Indexes remain unchanged.
 
 Finally, clear the terminal credential variable:
 

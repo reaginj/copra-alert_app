@@ -88,37 +88,40 @@ export function subscribeWarehouseDeliveries(warehouseUid: string, next: Listene
 export async function createBatchRecord(input: { farmerUid: string; batchDate: Date }) {
   const batchId = makeId('BATCH');
   const batchRef = doc(db, 'copra_batches', batchId);
-  const displayCode = await reserveDisplayCode('B', async (candidate) => {
-    await runTransaction(db, async (transaction) => {
-      const reservationRef = doc(db, 'display_codes', candidate);
-      if ((await transaction.get(reservationRef)).exists()) throw new DisplayCodeCollisionError();
-      transaction.set(batchRef, { batchId, displayCode: candidate, createdBy: input.farmerUid, batchDate: Timestamp.fromDate(input.batchDate), batchStatus: 'active' });
-      transaction.set(reservationRef, { displayCode: candidate, kind: 'batch', recordId: batchId, ownerUid: input.farmerUid, createdAt: serverTimestamp() });
-    });
+  const counterRef = doc(db, 'sequence_counters', 'batches');
+  const batchNumber = await runTransaction(db, async (transaction) => {
+    const counter = await transaction.get(counterRef);
+    const currentValue = readCounterValue(counter.data()?.currentValue);
+    const nextValue = currentValue + 1;
+    transaction.set(batchRef, { batchId, batchNumber: nextValue, createdBy: input.farmerUid, batchDate: Timestamp.fromDate(input.batchDate), batchStatus: 'active' });
+    transaction.set(counterRef, { kind: 'batch', currentValue: nextValue, lastRecordId: batchId, updatedBy: input.farmerUid, updatedAt: serverTimestamp() });
+    return nextValue;
   });
-  return { batchId, displayCode };
+  return { batchId, batchNumber };
 }
 
 export async function createDeliveryRecord(input: { farmerUid: string; warehouseUserId: string; deliveryDate: Date }) {
   const deliveryId = makeId('DEL');
   const deliveryRef = doc(db, 'delivery_records', deliveryId);
-  const displayCode = await reserveDisplayCode('D', async (candidate) => {
-    await runTransaction(db, async (transaction) => {
-      const reservationRef = doc(db, 'display_codes', candidate);
-      if ((await transaction.get(reservationRef)).exists()) throw new DisplayCodeCollisionError();
-      transaction.set(deliveryRef, {
-        deliveryId,
-        displayCode: candidate,
-        warehouseUserId: input.warehouseUserId,
-        createdBy: input.farmerUid,
-        updatedBy: null,
-        deliveryDate: Timestamp.fromDate(input.deliveryDate),
-        deliveryStatus: 'Scheduled',
-      });
-      transaction.set(reservationRef, { displayCode: candidate, kind: 'delivery', recordId: deliveryId, ownerUid: input.farmerUid, createdAt: serverTimestamp() });
+  const counterRef = doc(db, 'sequence_counters', 'deliveries');
+  const deliveryNumber = await runTransaction(db, async (transaction) => {
+    const counter = await transaction.get(counterRef);
+    const currentValue = readCounterValue(counter.data()?.currentValue);
+    const nextValue = currentValue + 1;
+    transaction.set(deliveryRef, {
+      deliveryId,
+      deliveryNumber: nextValue,
+      warehouseUserId: input.warehouseUserId,
+      createdBy: input.farmerUid,
+      updatedBy: null,
+      createdAt: serverTimestamp(),
+      deliveryDate: Timestamp.fromDate(input.deliveryDate),
+      deliveryStatus: 'Scheduled',
     });
+    transaction.set(counterRef, { kind: 'delivery', currentValue: nextValue, lastRecordId: deliveryId, updatedBy: input.farmerUid, updatedAt: serverTimestamp() });
+    return nextValue;
   });
-  return { deliveryId, displayCode };
+  return { deliveryId, deliveryNumber };
 }
 
 export async function completeBatchRecord(batchId: string, farmerUid: string) {
@@ -152,25 +155,10 @@ function makeId(prefix: 'BATCH' | 'WEIGHT' | 'DEL') {
   return `${prefix}-${date}-${suffix}`;
 }
 
-const DISPLAY_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-const MAX_DISPLAY_CODE_ATTEMPTS = 8;
-
-class DisplayCodeCollisionError extends Error {}
-
-async function reserveDisplayCode(prefix: 'B' | 'D', create: (candidate: string) => Promise<void>) {
-  for (let attempt = 0; attempt < MAX_DISPLAY_CODE_ATTEMPTS; attempt += 1) {
-    const bytes = await Crypto.getRandomBytesAsync(6);
-    // The alphabet has exactly 32 symbols, so masking a random byte is unbiased.
-    const candidate = `${prefix}-${Array.from(bytes, (byte) => DISPLAY_ALPHABET[byte & 31]).join('')}`;
-    try {
-      await create(candidate);
-      return candidate;
-    } catch (error) {
-      if (error instanceof DisplayCodeCollisionError) continue;
-      throw error;
-    }
-  }
-  throw new Error('Unable to reserve a unique display code. Please try again.');
+function readCounterValue(value: unknown) {
+  if (value == null) return 0;
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) throw new Error('The sequence counter is invalid. Contact an administrator before creating records.');
+  return value;
 }
 
 function parseBatch(item: QueryDocumentSnapshot<DocumentData>): CopraBatchRecord | null {
@@ -180,6 +168,7 @@ function parseBatch(item: QueryDocumentSnapshot<DocumentData>): CopraBatchRecord
   return {
     batchId: stringValue(data.batchId, item.id),
     displayCode: typeof data.displayCode === 'string' ? data.displayCode : undefined,
+    batchNumber: typeof data.batchNumber === 'number' && Number.isSafeInteger(data.batchNumber) && data.batchNumber > 0 ? data.batchNumber : undefined,
     createdBy: data.createdBy,
     batchDate,
     batchStatus: data.batchStatus,
@@ -191,21 +180,22 @@ function parseBatch(item: QueryDocumentSnapshot<DocumentData>): CopraBatchRecord
 function parseMonitoring(item: QueryDocumentSnapshot<DocumentData>): MonitoringRecord | null {
   const data = item.data(); const recordedAt = timestamp(data.recordedAt);
   const dryingStatus = data.dryingStatus === 'GOOD' || data.dryingStatus === 'NOT GOOD' || data.dryingStatus === 'BAD TIME' ? data.dryingStatus : null;
-  if (!recordedAt || typeof data.batchId !== 'string' || typeof data.temperature !== 'number') return null;
-  return { monitoringId: stringValue(data.monitoringId, item.id), batchId: data.batchId, temperature: data.temperature, dryingStatus, estimatedTimeRemaining: typeof data.estimatedTimeRemaining === 'number' ? data.estimatedTimeRemaining : null, recordedAt };
+  const remaining = typeof data.estimatedTimeRemaining === 'number' && Number.isFinite(data.estimatedTimeRemaining) && data.estimatedTimeRemaining >= 0 ? data.estimatedTimeRemaining : null;
+  if (!recordedAt || typeof data.batchId !== 'string' || !data.batchId.trim() || typeof data.temperature !== 'number' || !Number.isFinite(data.temperature)) return null;
+  return { monitoringId: stringValue(data.monitoringId, item.id), batchId: data.batchId, temperature: data.temperature, dryingStatus, estimatedTimeRemaining: remaining, recordedAt };
 }
 
 function parseWeight(item: QueryDocumentSnapshot<DocumentData>): WeightRecord | null {
   const data = item.data(); const recordedAt = timestamp(data.recordedAt);
   const batchId = typeof data.batchId === 'string' ? data.batchId : undefined;
   const deliveryId = typeof data.deliveryId === 'string' ? data.deliveryId : undefined;
-  if (!recordedAt || (!batchId && !deliveryId) || typeof data.weight !== 'number') return null;
+  if (!recordedAt || (!batchId && !deliveryId) || typeof data.weight !== 'number' || !Number.isFinite(data.weight) || data.weight <= 0) return null;
   return { weightId: stringValue(data.weightId, item.id), batchId, deliveryId, sackId: typeof data.sackId === 'string' ? data.sackId : undefined, weight: data.weight, recordedAt };
 }
 
 function parseAlert(item: QueryDocumentSnapshot<DocumentData>): AlertRecord | null {
   const data = item.data(); const alertDateTime = timestamp(data.alertDateTime);
-  if (!alertDateTime || typeof data.batchId !== 'string' || typeof data.alertMessage !== 'string' || typeof data.isRead !== 'boolean') return null;
+  if (!alertDateTime || typeof data.batchId !== 'string' || !data.batchId.trim() || typeof data.alertMessage !== 'string' || typeof data.isRead !== 'boolean') return null;
   return { alertId: stringValue(data.alertId, item.id), batchId: data.batchId, alertType: stringValue(data.alertType, 'Drying alert'), alertMessage: data.alertMessage, alertDateTime, isRead: data.isRead, readAt: timestamp(data.readAt) };
 }
 
@@ -213,5 +203,5 @@ function parseDelivery(item: QueryDocumentSnapshot<DocumentData>): DeliveryRecor
   const data = item.data(); const deliveryDate = timestamp(data.deliveryDate);
   const validStatus = data.deliveryStatus === 'Scheduled' || data.deliveryStatus === 'In Transit' || data.deliveryStatus === 'Received' || data.deliveryStatus === 'Cancelled';
   if (!deliveryDate || !validStatus || typeof data.warehouseUserId !== 'string' || typeof data.createdBy !== 'string') return null;
-  return { deliveryId: stringValue(data.deliveryId, item.id), displayCode: typeof data.displayCode === 'string' ? data.displayCode : undefined, batchId: typeof data.batchId === 'string' ? data.batchId : undefined, warehouseUserId: data.warehouseUserId, createdBy: data.createdBy, updatedBy: typeof data.updatedBy === 'string' ? data.updatedBy : null, deliveryWeight: typeof data.deliveryWeight === 'number' ? data.deliveryWeight : undefined, deliveryDate, deliveryStatus: data.deliveryStatus };
+  return { deliveryId: stringValue(data.deliveryId, item.id), displayCode: typeof data.displayCode === 'string' ? data.displayCode : undefined, deliveryNumber: typeof data.deliveryNumber === 'number' && Number.isSafeInteger(data.deliveryNumber) && data.deliveryNumber > 0 ? data.deliveryNumber : undefined, batchId: typeof data.batchId === 'string' ? data.batchId : undefined, warehouseUserId: data.warehouseUserId, createdBy: data.createdBy, updatedBy: typeof data.updatedBy === 'string' ? data.updatedBy : null, deliveryWeight: typeof data.deliveryWeight === 'number' ? data.deliveryWeight : undefined, createdAt: timestamp(data.createdAt) ?? undefined, deliveryDate, deliveryStatus: data.deliveryStatus };
 }

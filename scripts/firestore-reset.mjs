@@ -32,7 +32,7 @@ const auth = getAuth(app);
 console.log(`Mode: ${apply ? 'APPLY (deletion requested)' : 'DRY RUN (read-only)'}`);
 console.log(`Firebase project: ${projectId}`);
 console.log(`Target collections: ${TARGET_COLLECTIONS.join(', ')}`);
-console.log('Protected resources: users, Authentication accounts, display_codes, rules, and indexes');
+console.log('Protected resources: users, Authentication accounts, display_codes, sequence_counters, rules, and indexes');
 
 const snapshots = new Map();
 for (const collectionName of TARGET_COLLECTIONS) {
@@ -42,15 +42,17 @@ for (const collectionName of TARGET_COLLECTIONS) {
   for (const document of snapshot.docs) console.log(`  - ${document.id}`);
 }
 
-const [userDocuments, authUsers, displayCodeCount] = await Promise.all([
+const [userDocuments, authUsers, displayCodeCount, sequenceCounterCount] = await Promise.all([
   db.collection('users').count().get().then((result) => result.data().count),
   countAuthUsers(),
   db.collection('display_codes').count().get().then((result) => result.data().count),
+  db.collection('sequence_counters').count().get().then((result) => result.data().count),
 ]);
 console.log('\nPreserved resource counts:');
 console.log(`  users documents: ${userDocuments}`);
 console.log(`  Authentication accounts: ${authUsers}`);
 console.log(`  display_codes documents: ${displayCodeCount} (preserved because delivery/batch code reservations depend on them)`);
+console.log(`  sequence_counters documents: ${sequenceCounterCount} (preserved to prevent number reuse)`);
 
 if (!apply) {
   console.log('\nDry run complete. Nothing was deleted and no backup file was written.');

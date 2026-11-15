@@ -38,6 +38,10 @@ service cloud.firestore {
       return /databases/$(database)/documents/display_codes/$(code);
     }
 
+    function sequenceCounterPath(counterId) {
+      return /databases/$(database)/documents/sequence_counters/$(counterId);
+    }
+
     match /users/{uid} {
       allow get: if signedIn() && (request.auth.uid == uid || (isFarmer() && resource.data.role == 'warehouse'));
       allow list: if isFarmer() && resource.data.role == 'warehouse';
@@ -53,16 +57,26 @@ service cloud.firestore {
     match /copra_batches/{batchId} {
       allow read: if isFarmer();
       allow create: if isFarmer()
-                    && request.resource.data.keys().hasOnly(['batchId', 'displayCode', 'createdBy', 'batchDate', 'batchStatus'])
                     && request.resource.data.batchId == batchId
-                    && validDisplayCode(request.resource.data.displayCode, 'B')
                     && request.resource.data.createdBy == request.auth.uid
                     && request.resource.data.batchDate is timestamp
                     && request.resource.data.batchStatus == 'active'
-                    && existsAfter(displayCodePath(request.resource.data.displayCode))
-                    && getAfter(displayCodePath(request.resource.data.displayCode)).data.kind == 'batch'
-                    && getAfter(displayCodePath(request.resource.data.displayCode)).data.recordId == batchId
-                    && getAfter(displayCodePath(request.resource.data.displayCode)).data.ownerUid == request.auth.uid;
+                    && (
+                      (request.resource.data.keys().hasOnly(['batchId', 'batchNumber', 'createdBy', 'batchDate', 'batchStatus'])
+                        && request.resource.data.batchNumber is int
+                        && request.resource.data.batchNumber > 0
+                        && existsAfter(sequenceCounterPath('batches'))
+                        && getAfter(sequenceCounterPath('batches')).data.currentValue == request.resource.data.batchNumber
+                        && getAfter(sequenceCounterPath('batches')).data.lastRecordId == batchId
+                        && getAfter(sequenceCounterPath('batches')).data.updatedBy == request.auth.uid)
+                      ||
+                      (request.resource.data.keys().hasOnly(['batchId', 'displayCode', 'createdBy', 'batchDate', 'batchStatus'])
+                        && validDisplayCode(request.resource.data.displayCode, 'B')
+                        && existsAfter(displayCodePath(request.resource.data.displayCode))
+                        && getAfter(displayCodePath(request.resource.data.displayCode)).data.kind == 'batch'
+                        && getAfter(displayCodePath(request.resource.data.displayCode)).data.recordId == batchId
+                        && getAfter(displayCodePath(request.resource.data.displayCode)).data.ownerUid == request.auth.uid)
+                    );
       allow update: if isFarmer()
                     && resource.data.createdBy == request.auth.uid
                     && resource.data.batchStatus == 'active'
@@ -123,11 +137,10 @@ service cloud.firestore {
 
       allow create: if isFarmer()
                     && request.resource.data.keys().hasOnly([
-                      'deliveryId', 'displayCode', 'batchId', 'warehouseUserId', 'createdBy', 'updatedBy',
-                      'deliveryWeight', 'deliveryDate', 'deliveryStatus'
+                      'deliveryId', 'displayCode', 'deliveryNumber', 'batchId', 'warehouseUserId', 'createdBy', 'updatedBy',
+                      'deliveryWeight', 'createdAt', 'deliveryDate', 'deliveryStatus'
                     ])
                     && request.resource.data.deliveryId == deliveryId
-                    && validDisplayCode(request.resource.data.displayCode, 'D')
                     && request.resource.data.createdBy == request.auth.uid
                     && request.resource.data.updatedBy == null
                     && request.resource.data.warehouseUserId is string
@@ -138,12 +151,31 @@ service cloud.firestore {
                     && (!request.resource.data.keys().hasAny(['deliveryWeight'])
                         || (isNumber(request.resource.data.deliveryWeight)
                             && request.resource.data.deliveryWeight > 0))
+                    && (!request.resource.data.keys().hasAny(['createdAt'])
+                        || (request.resource.data.createdAt is timestamp
+                            && request.resource.data.createdAt == request.time))
                     && request.resource.data.deliveryDate is timestamp
                     && request.resource.data.deliveryStatus == 'Scheduled'
-                    && existsAfter(displayCodePath(request.resource.data.displayCode))
-                    && getAfter(displayCodePath(request.resource.data.displayCode)).data.kind == 'delivery'
-                    && getAfter(displayCodePath(request.resource.data.displayCode)).data.recordId == deliveryId
-                    && getAfter(displayCodePath(request.resource.data.displayCode)).data.ownerUid == request.auth.uid;
+                    && (
+                      (request.resource.data.keys().hasAny(['deliveryNumber'])
+                        && !request.resource.data.keys().hasAny(['displayCode'])
+                        && request.resource.data.deliveryNumber is int
+                        && request.resource.data.deliveryNumber > 0
+                        && request.resource.data.createdAt is timestamp
+                        && request.resource.data.createdAt == request.time
+                        && existsAfter(sequenceCounterPath('deliveries'))
+                        && getAfter(sequenceCounterPath('deliveries')).data.currentValue == request.resource.data.deliveryNumber
+                        && getAfter(sequenceCounterPath('deliveries')).data.lastRecordId == deliveryId
+                        && getAfter(sequenceCounterPath('deliveries')).data.updatedBy == request.auth.uid)
+                      ||
+                      (!request.resource.data.keys().hasAny(['deliveryNumber'])
+                        && request.resource.data.keys().hasAny(['displayCode'])
+                        && validDisplayCode(request.resource.data.displayCode, 'D')
+                        && existsAfter(displayCodePath(request.resource.data.displayCode))
+                        && getAfter(displayCodePath(request.resource.data.displayCode)).data.kind == 'delivery'
+                        && getAfter(displayCodePath(request.resource.data.displayCode)).data.recordId == deliveryId
+                        && getAfter(displayCodePath(request.resource.data.displayCode)).data.ownerUid == request.auth.uid)
+                    );
 
       allow update: if signedIn()
                     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deliveryStatus', 'updatedBy'])
@@ -159,6 +191,52 @@ service cloud.firestore {
                         && resource.data.warehouseUserId == request.auth.uid
                         && resource.data.deliveryStatus == 'In Transit'
                         && request.resource.data.deliveryStatus == 'Received')
+                    );
+      allow delete: if false;
+    }
+
+    match /sequence_counters/{counterId} {
+      allow get: if isFarmer() && (counterId == 'batches' || counterId == 'deliveries');
+      allow list: if false;
+      allow create: if isFarmer()
+                    && (counterId == 'batches' || counterId == 'deliveries')
+                    && request.resource.data.keys().hasOnly(['kind', 'currentValue', 'lastRecordId', 'updatedBy', 'updatedAt'])
+                    && request.resource.data.kind == (counterId == 'batches' ? 'batch' : 'delivery')
+                    && request.resource.data.currentValue == 1
+                    && request.resource.data.lastRecordId is string
+                    && request.resource.data.updatedBy == request.auth.uid
+                    && request.resource.data.updatedAt == request.time
+                    && (
+                      (counterId == 'batches'
+                        && existsAfter(/databases/$(database)/documents/copra_batches/$(request.resource.data.lastRecordId))
+                        && getAfter(/databases/$(database)/documents/copra_batches/$(request.resource.data.lastRecordId)).data.batchNumber == 1
+                        && getAfter(/databases/$(database)/documents/copra_batches/$(request.resource.data.lastRecordId)).data.createdBy == request.auth.uid)
+                      ||
+                      (counterId == 'deliveries'
+                        && existsAfter(/databases/$(database)/documents/delivery_records/$(request.resource.data.lastRecordId))
+                        && getAfter(/databases/$(database)/documents/delivery_records/$(request.resource.data.lastRecordId)).data.deliveryNumber == 1
+                        && getAfter(/databases/$(database)/documents/delivery_records/$(request.resource.data.lastRecordId)).data.createdBy == request.auth.uid)
+                    );
+      allow update: if isFarmer()
+                    && (counterId == 'batches' || counterId == 'deliveries')
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['currentValue', 'lastRecordId', 'updatedBy', 'updatedAt'])
+                    && request.resource.data.kind == resource.data.kind
+                    && request.resource.data.currentValue == resource.data.currentValue + 1
+                    && request.resource.data.lastRecordId is string
+                    && request.resource.data.updatedBy == request.auth.uid
+                    && request.resource.data.updatedAt == request.time
+                    && (
+                      (counterId == 'batches'
+                        && resource.data.kind == 'batch'
+                        && existsAfter(/databases/$(database)/documents/copra_batches/$(request.resource.data.lastRecordId))
+                        && getAfter(/databases/$(database)/documents/copra_batches/$(request.resource.data.lastRecordId)).data.batchNumber == request.resource.data.currentValue
+                        && getAfter(/databases/$(database)/documents/copra_batches/$(request.resource.data.lastRecordId)).data.createdBy == request.auth.uid)
+                      ||
+                      (counterId == 'deliveries'
+                        && resource.data.kind == 'delivery'
+                        && existsAfter(/databases/$(database)/documents/delivery_records/$(request.resource.data.lastRecordId))
+                        && getAfter(/databases/$(database)/documents/delivery_records/$(request.resource.data.lastRecordId)).data.deliveryNumber == request.resource.data.currentValue
+                        && getAfter(/databases/$(database)/documents/delivery_records/$(request.resource.data.lastRecordId)).data.createdBy == request.auth.uid)
                     );
       allow delete: if false;
     }

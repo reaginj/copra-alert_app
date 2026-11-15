@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
+import assert from 'node:assert/strict';
 import { after, before, beforeEach, test } from 'node:test';
 import { assertFails, assertSucceeds, initializeTestEnvironment } from '@firebase/rules-unit-testing';
-import { collection, doc, getDoc, getDocs, query, serverTimestamp, setDoc, Timestamp, updateDoc, where, writeBatch } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, runTransaction, serverTimestamp, setDoc, Timestamp, updateDoc, where, writeBatch } from 'firebase/firestore';
 
 const projectId = 'copra-alert-rules-test';
 let environment;
@@ -96,6 +97,30 @@ test('farmer can atomically create a delivery code reservation without a batch',
   await assertFails(updateDoc(doc(db, 'delivery_records', 'DEL-NEW'), { displayCode: 'D-7K2P9Q' }));
 });
 
+test('concurrent batch creation allocates unique sequential numbers', async () => {
+  const db1 = environment.authenticatedContext('farmer-1').firestore();
+  const db2 = environment.authenticatedContext('farmer-1').firestore();
+  const numbers = await Promise.all([
+    createSequentialBatch(db1, 'BATCH-SEQ-A'),
+    createSequentialBatch(db2, 'BATCH-SEQ-B'),
+  ]);
+  assert.deepEqual(numbers.sort((a, b) => a - b), [1, 2]);
+  const counter = await getDoc(doc(db1, 'sequence_counters', 'batches'));
+  assert.equal(counter.data().currentValue, 2);
+});
+
+test('batch and delivery sequences are separate and cannot be forged', async () => {
+  const db = environment.authenticatedContext('farmer-1').firestore();
+  assert.equal(await createSequentialBatch(db, 'BATCH-SEQ-ONLY'), 1);
+  assert.equal(await createSequentialDelivery(db, 'DEL-SEQ-ONLY'), 1);
+  await assertFails(setDoc(doc(db, 'sequence_counters', 'batches'), { kind: 'batch', currentValue: 99, lastRecordId: 'FORGED', updatedBy: 'farmer-1', updatedAt: serverTimestamp() }));
+
+  const duplicate = writeBatch(db);
+  duplicate.set(doc(db, 'copra_batches', 'BATCH-DUPLICATE'), { batchId: 'BATCH-DUPLICATE', batchNumber: 1, createdBy: 'farmer-1', batchDate: Timestamp.now(), batchStatus: 'active' });
+  duplicate.set(doc(db, 'sequence_counters', 'batches'), { kind: 'batch', currentValue: 2, lastRecordId: 'BATCH-DUPLICATE', updatedBy: 'farmer-1', updatedAt: serverTimestamp() });
+  await assertFails(duplicate.commit());
+});
+
 test('delivery sack weights use an owned delivery and deterministic immutable id', async () => {
   const farmer = environment.authenticatedContext('farmer-1').firestore();
   const otherFarmer = environment.authenticatedContext('farmer-2').firestore();
@@ -184,3 +209,25 @@ test('farmer cannot skip directly from Scheduled to Received', async () => {
   await assertFails(updateDoc(doc(db, 'delivery_records', 'DEL-2'), { deliveryStatus: 'Received', updatedBy: 'farmer-1' }));
   await assertSucceeds(updateDoc(doc(db, 'delivery_records', 'DEL-2'), { deliveryStatus: 'In Transit', updatedBy: 'farmer-1' }));
 });
+
+async function createSequentialBatch(db, batchId) {
+  return runTransaction(db, async (transaction) => {
+    const counterRef = doc(db, 'sequence_counters', 'batches');
+    const counter = await transaction.get(counterRef);
+    const next = (counter.data()?.currentValue ?? 0) + 1;
+    transaction.set(doc(db, 'copra_batches', batchId), { batchId, batchNumber: next, createdBy: 'farmer-1', batchDate: Timestamp.now(), batchStatus: 'active' });
+    transaction.set(counterRef, { kind: 'batch', currentValue: next, lastRecordId: batchId, updatedBy: 'farmer-1', updatedAt: serverTimestamp() });
+    return next;
+  });
+}
+
+async function createSequentialDelivery(db, deliveryId) {
+  return runTransaction(db, async (transaction) => {
+    const counterRef = doc(db, 'sequence_counters', 'deliveries');
+    const counter = await transaction.get(counterRef);
+    const next = (counter.data()?.currentValue ?? 0) + 1;
+    transaction.set(doc(db, 'delivery_records', deliveryId), { deliveryId, deliveryNumber: next, warehouseUserId: 'warehouse-1', createdBy: 'farmer-1', updatedBy: null, createdAt: serverTimestamp(), deliveryDate: Timestamp.now(), deliveryStatus: 'Scheduled' });
+    transaction.set(counterRef, { kind: 'delivery', currentValue: next, lastRecordId: deliveryId, updatedBy: 'farmer-1', updatedAt: serverTimestamp() });
+    return next;
+  });
+}
