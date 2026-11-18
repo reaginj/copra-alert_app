@@ -1,4 +1,5 @@
-import { initializeApp } from 'firebase/app';
+import { getApps, initializeApp } from 'firebase/app';
+import { getDatabase } from 'firebase/database';
 import { getFirestore } from 'firebase/firestore';
 import {
   initializeAuth,
@@ -18,6 +19,17 @@ const firebaseConfig = {
   measurementId: "G-WKKLDQKDHK"
 };
 
+const iotFirebaseConfig = {
+  apiKey: "AIzaSyBAjWEqOLvmbEsJqjKymWbQu6Wa7z0uytU",
+  authDomain: "copra-14c47.firebaseapp.com",
+  databaseURL: "https://copra-14c47-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "copra-14c47",
+  storageBucket: "copra-14c47.firebasestorage.app",
+  messagingSenderId: "465547121120",
+  appId: "1:465547121120:web:7cd564908a9fbbe2dc1b85",
+  measurementId: "G-VLJ1HKCFVZ"
+};
+
 const app = initializeApp(firebaseConfig);
 
 const getReactNativePersistence = (
@@ -33,4 +45,9 @@ const auth: Auth = initializeAuth(app, {
 });
 const db = getFirestore(app);
 
-export { auth, db };
+const iotAppName = 'copra-alert-iot';
+const iotApp = getApps().find((firebaseApp) => firebaseApp.name === iotAppName)
+  ?? initializeApp(iotFirebaseConfig, iotAppName);
+const iotDb = getDatabase(iotApp);
+
+export { auth, db, iotDb };
