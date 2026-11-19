@@ -20,6 +20,7 @@ export type CopraBatchRecord = {
   createdBy: string;
   batchDate: Timestamp;
   batchStatus: BatchStatus;
+  iotSessionId?: string;
   completedAt?: Timestamp;
   completedBy?: string;
 };

@@ -1,0 +1,355 @@
+import {
+  get,
+  limitToLast,
+  onValue,
+  orderByChild,
+  orderByKey,
+  query,
+  ref,
+  type DataSnapshot,
+} from 'firebase/database';
+import { iotDb } from '@/config/firebase';
+
+const DEFAULT_HISTORY_LIMIT = 200;
+const MAX_HISTORY_LIMIT = 500;
+const DEFAULT_SESSION_DISCOVERY_LIMIT = 20;
+const MAX_SESSION_DISCOVERY_LIMIT = 50;
+const INVALID_FIREBASE_KEY = /[.#$\[\]\/]/;
+
+export interface IoTCookingSession {
+  id: string;
+  averageTemperatureC?: number;
+  minimumTemperatureC?: number;
+  maximumTemperatureC?: number;
+  startTemperatureC?: number;
+  finalTemperatureC?: number;
+  durationSeconds?: number;
+  startTime?: string;
+  finishTime?: string;
+  status?: string;
+  processingResult?: string;
+  temperatureRateCPerMin?: number;
+  totalTemperatureReadings?: number;
+}
+
+export interface IoTTemperatureReading {
+  id: string;
+  sessionId: string;
+  temperatureC: number;
+  timestamp: string;
+}
+
+export interface IoTHistoryOptions {
+  limit?: number;
+}
+
+export interface IoTTemperatureHistoryValidation {
+  invalidRecordCount: number;
+  invalidTemperatureCount: number;
+  invalidTimestampCount: number;
+}
+
+export interface IoTSessionCandidate {
+  id: string;
+  firstReadingAt: string;
+  latestReadingAt: string;
+  validReadingCount: number;
+}
+
+export type IoTSubscriptionErrorHandler = (error: IoTMonitoringError) => void;
+
+export class IoTMonitoringError extends Error {
+  constructor(
+    message: string,
+    readonly code: 'invalid-session-id' | 'permission-denied' | 'network-error' | 'read-failed',
+    readonly cause?: unknown,
+  ) {
+    super(message);
+    this.name = 'IoTMonitoringError';
+  }
+}
+
+export async function getCookingSession(sessionId: string): Promise<IoTCookingSession | null> {
+  const safeSessionId = validateSessionId(sessionId);
+  try {
+    const snapshot = await get(ref(iotDb, `cooking_sessions/${safeSessionId}`));
+    return parseCookingSessionSnapshot(snapshot, safeSessionId);
+  } catch (error) {
+    throw normalizeFirebaseError(error, `Unable to retrieve cooking session ${safeSessionId}.`);
+  }
+}
+
+export async function getTemperatureHistory(
+  sessionId: string,
+  options: IoTHistoryOptions = {},
+): Promise<IoTTemperatureReading[]> {
+  const safeSessionId = validateSessionId(sessionId);
+  const historyQuery = makeHistoryQuery(safeSessionId, options.limit);
+  try {
+    const snapshot = await get(historyQuery);
+    return parseTemperatureHistorySnapshot(snapshot, safeSessionId).readings;
+  } catch (error) {
+    throw normalizeFirebaseError(error, `Unable to retrieve temperature history for ${safeSessionId}.`);
+  }
+}
+
+export async function discoverIotSessions(limit = DEFAULT_SESSION_DISCOVERY_LIMIT): Promise<IoTSessionCandidate[]> {
+  const sessionLimit = normalizeSessionDiscoveryLimit(limit);
+  try {
+    const snapshot = await get(query(
+      ref(iotDb, 'temperature_history'),
+      orderByKey(),
+      limitToLast(sessionLimit),
+    ));
+    if (!snapshot.exists()) return [];
+
+    const sessions: IoTSessionCandidate[] = [];
+    snapshot.forEach((sessionSnapshot) => {
+      const candidate = parseSessionCandidate(sessionSnapshot);
+      if (candidate) sessions.push(candidate);
+    });
+    return sessions.sort((left, right) => Date.parse(right.latestReadingAt) - Date.parse(left.latestReadingAt));
+  } catch (error) {
+    throw normalizeFirebaseError(error, 'Unable to discover IoT cooking sessions.');
+  }
+}
+
+export function subscribeToCookingSession(
+  sessionId: string,
+  onSession: (session: IoTCookingSession | null) => void,
+  onError?: IoTSubscriptionErrorHandler,
+) {
+  const safeSessionId = validateSessionId(sessionId);
+  return onValue(
+    ref(iotDb, `cooking_sessions/${safeSessionId}`),
+    (snapshot) => onSession(parseCookingSessionSnapshot(snapshot, safeSessionId)),
+    (error) => onError?.(normalizeFirebaseError(error, `Cooking session subscription failed for ${safeSessionId}.`)),
+  );
+}
+
+export function subscribeToTemperatureHistory(
+  sessionId: string,
+  onHistory: (readings: IoTTemperatureReading[], validation: IoTTemperatureHistoryValidation) => void,
+  onError?: IoTSubscriptionErrorHandler,
+  options: IoTHistoryOptions = {},
+) {
+  const safeSessionId = validateSessionId(sessionId);
+  return onValue(
+    makeHistoryQuery(safeSessionId, options.limit),
+    (snapshot) => {
+      const result = parseTemperatureHistorySnapshot(snapshot, safeSessionId);
+      onHistory(result.readings, result.validation);
+    },
+    (error) => onError?.(normalizeFirebaseError(error, `Temperature history subscription failed for ${safeSessionId}.`)),
+  );
+}
+
+function makeHistoryQuery(sessionId: string, requestedLimit?: number) {
+  return query(
+    ref(iotDb, `temperature_history/${sessionId}`),
+    orderByChild('timestamp'),
+    limitToLast(normalizeHistoryLimit(requestedLimit)),
+  );
+}
+
+function parseCookingSessionSnapshot(snapshot: DataSnapshot, sessionId: string) {
+  if (!snapshot.exists()) return null;
+  const value: unknown = snapshot.val();
+  if (!isRecord(value)) {
+    console.warn(`[IoT Monitoring] Ignored malformed cooking session ${sessionId}: expected an object.`);
+    return null;
+  }
+
+  return {
+    id: sessionId,
+    ...optionalNumber(value, 'averageTemperatureC', ['average_temperature_c', 'averageTemperatureC', 'avg_temperature_c', 'average_temperature']),
+    ...optionalNumber(value, 'minimumTemperatureC', ['minimum_temperature_c', 'minimumTemperatureC', 'min_temperature_c', 'minimum_temperature']),
+    ...optionalNumber(value, 'maximumTemperatureC', ['maximum_temperature_c', 'maximumTemperatureC', 'max_temperature_c', 'maximum_temperature']),
+    ...optionalNumber(value, 'startTemperatureC', ['start_temperature_c', 'startTemperatureC', 'initial_temperature_c', 'start_temperature']),
+    ...optionalNumber(value, 'finalTemperatureC', ['final_temperature_c', 'finalTemperatureC', 'end_temperature_c', 'final_temperature']),
+    ...optionalNonNegativeNumber(value, 'durationSeconds', ['duration_seconds', 'durationSeconds', 'duration_sec']),
+    ...optionalTimestamp(value, 'startTime', ['start_time', 'startTime', 'started_at', 'startedAt']),
+    ...optionalTimestamp(value, 'finishTime', ['finish_time', 'finishTime', 'end_time', 'endTime', 'finished_at', 'finishedAt']),
+    ...optionalString(value, 'status', ['status', 'session_status', 'sessionStatus']),
+    ...optionalString(value, 'processingResult', ['processing_result', 'processingResult', 'result']),
+    ...optionalNumber(value, 'temperatureRateCPerMin', ['temperature_rate_c_per_min', 'temperatureRateCPerMin', 'temperature_rate']),
+    ...optionalNonNegativeInteger(value, 'totalTemperatureReadings', ['total_temperature_readings', 'totalTemperatureReadings', 'reading_count']),
+  } satisfies IoTCookingSession;
+}
+
+function parseTemperatureHistorySnapshot(snapshot: DataSnapshot, sessionId: string) {
+  const validation: IoTTemperatureHistoryValidation = { invalidRecordCount: 0, invalidTemperatureCount: 0, invalidTimestampCount: 0 };
+  if (!snapshot.exists()) return { readings: [], validation };
+  const value: unknown = snapshot.val();
+  if (!isRecord(value)) {
+    console.warn(`[IoT Monitoring] Ignored malformed temperature history for ${sessionId}: expected an object.`);
+    validation.invalidRecordCount = 1;
+    return { readings: [], validation };
+  }
+
+  const readings: IoTTemperatureReading[] = [];
+  const invalidTimestampIds: string[] = [];
+
+  Object.entries(value).forEach(([readingId, rawReading]) => {
+    const parsed = parseTemperatureReading(rawReading, sessionId, readingId);
+    if (parsed.reading) readings.push(parsed.reading);
+    else {
+      validation[parsed.issue] += 1;
+      if (parsed.issue === 'invalidTimestampCount') invalidTimestampIds.push(readingId);
+    }
+  });
+
+  if (invalidTimestampIds.length) {
+    console.warn(`[IoT Monitoring] Rejected ${invalidTimestampIds.length} reading(s) with invalid source timestamps for ${sessionId}: ${invalidTimestampIds.slice(0, 10).join(', ')}`);
+  }
+
+  return { readings: readings.sort((left, right) => Date.parse(left.timestamp) - Date.parse(right.timestamp)), validation };
+}
+
+function parseTemperatureReading(value: unknown, sessionId: string, readingId: string): { reading: IoTTemperatureReading | null; issue: keyof IoTTemperatureHistoryValidation } {
+  if (!isRecord(value)) return { reading: null, issue: 'invalidRecordCount' };
+
+  const temperatureValue = firstPresent(value, ['temperature_c', 'temperatureC', 'temperature', 'temp_c', 'tempC']);
+  const timestampValue = firstPresent(value, ['timestamp', 'recorded_at', 'recordedAt', 'time']);
+  const temperatureC = finiteNumber(temperatureValue);
+  const timestamp = validTimestamp(timestampValue);
+
+  // Timestamp parsing is intentionally restricted to timestamp aliases. A
+  // temperature value is never considered as a timestamp fallback.
+  if (temperatureC === null) return { reading: null, issue: 'invalidTemperatureCount' };
+  if (timestamp === null) return { reading: null, issue: 'invalidTimestampCount' };
+  return { reading: { id: readingId, sessionId, temperatureC, timestamp }, issue: 'invalidRecordCount' };
+}
+
+function parseSessionCandidate(sessionSnapshot: DataSnapshot): IoTSessionCandidate | null {
+  const sessionId = sessionSnapshot.key;
+  if (!sessionId) return null;
+
+  let firstTimestamp = Number.POSITIVE_INFINITY;
+  let latestTimestamp = Number.NEGATIVE_INFINITY;
+  let validReadingCount = 0;
+  sessionSnapshot.forEach((readingSnapshot) => {
+    const { reading } = parseTemperatureReading(readingSnapshot.val(), sessionId, readingSnapshot.key ?? 'unknown');
+    if (!reading) return;
+    const timestamp = Date.parse(reading.timestamp);
+    firstTimestamp = Math.min(firstTimestamp, timestamp);
+    latestTimestamp = Math.max(latestTimestamp, timestamp);
+    validReadingCount += 1;
+  });
+
+  if (!validReadingCount || !Number.isFinite(firstTimestamp) || !Number.isFinite(latestTimestamp)) return null;
+  return {
+    id: sessionId,
+    firstReadingAt: new Date(firstTimestamp).toISOString(),
+    latestReadingAt: new Date(latestTimestamp).toISOString(),
+    validReadingCount,
+  };
+}
+
+function optionalNumber<K extends string>(value: Record<string, unknown>, key: K, aliases: string[]) {
+  const raw = firstPresent(value, aliases);
+  const parsed = finiteNumber(raw);
+  return parsed === null ? {} : { [key]: parsed } as Record<K, number>;
+}
+
+function optionalNonNegativeNumber<K extends string>(value: Record<string, unknown>, key: K, aliases: string[]) {
+  const raw = firstPresent(value, aliases);
+  const parsed = finiteNumber(raw);
+  return parsed === null || parsed < 0 ? {} : { [key]: parsed } as Record<K, number>;
+}
+
+function optionalNonNegativeInteger<K extends string>(value: Record<string, unknown>, key: K, aliases: string[]) {
+  const raw = firstPresent(value, aliases);
+  const parsed = finiteNumber(raw);
+  return parsed === null || !Number.isSafeInteger(parsed) || parsed < 0 ? {} : { [key]: parsed } as Record<K, number>;
+}
+
+function optionalTimestamp<K extends string>(value: Record<string, unknown>, key: K, aliases: string[]) {
+  const parsed = validTimestamp(firstPresent(value, aliases));
+  return parsed === null ? {} : { [key]: parsed } as Record<K, string>;
+}
+
+function optionalString<K extends string>(value: Record<string, unknown>, key: K, aliases: string[]) {
+  const raw = firstPresent(value, aliases);
+  const parsed = typeof raw === 'string' ? raw.trim() : '';
+  return parsed ? { [key]: parsed } as Record<K, string> : {};
+}
+
+function firstPresent(value: Record<string, unknown>, aliases: string[]) {
+  for (const alias of aliases) {
+    if (value[alias] !== undefined && value[alias] !== null) return value[alias];
+  }
+  return undefined;
+}
+
+function finiteNumber(value: unknown) {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function validTimestamp(value: unknown) {
+  if (typeof value !== 'string' && typeof value !== 'number') return null;
+
+  let milliseconds: number;
+  if (typeof value === 'number') milliseconds = value < 10_000_000_000 ? value * 1000 : value;
+  else if (/^\d+(?:\.\d+)?$/.test(value.trim())) {
+    const numeric = Number(value);
+    milliseconds = numeric < 10_000_000_000 ? numeric * 1000 : numeric;
+  } else {
+    const dateParts = value.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,3})?)?)?/);
+    if (dateParts) {
+      const [, yearText, monthText, dayText, hourText = '0', minuteText = '0', secondText = '0'] = dateParts;
+      const year = Number(yearText); const month = Number(monthText); const day = Number(dayText);
+      const hour = Number(hourText); const minute = Number(minuteText); const second = Number(secondText);
+      const daysInMonth = month >= 1 && month <= 12 ? new Date(Date.UTC(year, month, 0)).getUTCDate() : 0;
+      if (day < 1 || day > daysInMonth || hour > 23 || minute > 59 || second > 59) return null;
+    } else if (/^\d{4}-/.test(value)) return null;
+    milliseconds = Date.parse(value);
+  }
+
+  if (!Number.isFinite(milliseconds) || milliseconds <= 0 || milliseconds >= Date.UTC(2101, 0, 1)) return null;
+  const date = new Date(milliseconds);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function normalizeHistoryLimit(value?: number) {
+  if (value === undefined) return DEFAULT_HISTORY_LIMIT;
+  if (!Number.isFinite(value) || value <= 0) return DEFAULT_HISTORY_LIMIT;
+  return Math.min(MAX_HISTORY_LIMIT, Math.max(1, Math.floor(value)));
+}
+
+function normalizeSessionDiscoveryLimit(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return DEFAULT_SESSION_DISCOVERY_LIMIT;
+  return Math.min(MAX_SESSION_DISCOVERY_LIMIT, Math.max(1, Math.floor(value)));
+}
+
+function validateSessionId(sessionId: string) {
+  const normalized = sessionId.trim();
+  if (!normalized || INVALID_FIREBASE_KEY.test(normalized)) {
+    throw new IoTMonitoringError('A valid explicit cooking session ID is required.', 'invalid-session-id');
+  }
+  return normalized;
+}
+
+function normalizeFirebaseError(error: unknown, fallbackMessage: string) {
+  if (error instanceof IoTMonitoringError) return error;
+  const code = errorCode(error).toLowerCase();
+  const message = error instanceof Error ? error.message : fallbackMessage;
+  if (code.includes('permission') || /permission|denied/i.test(message)) {
+    return new IoTMonitoringError('Permission denied while reading the IoT Realtime Database.', 'permission-denied', error);
+  }
+  if (code.includes('network') || /network|offline|failed to fetch|connection/i.test(message)) {
+    return new IoTMonitoringError('Unable to reach the IoT Realtime Database.', 'network-error', error);
+  }
+  return new IoTMonitoringError(`${fallbackMessage} ${message}`.trim(), 'read-failed', error);
+}
+
+function errorCode(error: unknown) {
+  return isRecord(error) && typeof error.code === 'string' ? error.code : '';
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}

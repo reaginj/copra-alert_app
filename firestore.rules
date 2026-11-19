@@ -80,13 +80,26 @@ service cloud.firestore {
       allow update: if isFarmer()
                     && resource.data.createdBy == request.auth.uid
                     && resource.data.batchStatus == 'active'
-                    && request.resource.data.batchStatus == 'completed'
-                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-                      'batchStatus', 'completedAt', 'completedBy'
-                    ])
-                    && request.resource.data.completedBy == request.auth.uid
-                    && request.resource.data.completedAt is timestamp
-                    && request.resource.data.completedAt == request.time;
+                    && (
+                      (
+                        request.resource.data.batchStatus == 'completed'
+                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                          'batchStatus', 'completedAt', 'completedBy'
+                        ])
+                        && request.resource.data.completedBy == request.auth.uid
+                        && request.resource.data.completedAt is timestamp
+                        && request.resource.data.completedAt == request.time
+                      )
+                      ||
+                      (
+                        request.resource.data.batchStatus == 'active'
+                        && !resource.data.keys().hasAny(['iotSessionId'])
+                        && request.resource.data.diff(resource.data).addedKeys().hasAll(['iotSessionId'])
+                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['iotSessionId'])
+                        && request.resource.data.iotSessionId is string
+                        && request.resource.data.iotSessionId.matches('^[A-Za-z0-9_-]{1,100}$')
+                      )
+                    );
       allow delete: if false;
     }
 

@@ -2,6 +2,8 @@ import {
   collection,
   doc,
   documentId,
+  getDocs,
+  limit,
   onSnapshot,
   orderBy,
   query,
@@ -140,6 +142,33 @@ export async function completeBatchRecord(batchId: string, farmerUid: string) {
   });
 }
 
+export async function linkBatchToIotSessionRecord(batchId: string, sessionId: string, farmerUid: string) {
+  const normalizedSessionId = sessionId.trim();
+  if (!normalizedSessionId || /[.#$\[\]\/]/.test(normalizedSessionId)) throw new Error('Select a valid IoT session.');
+
+  const duplicate = await getDocs(query(
+    collection(db, 'copra_batches'),
+    where('iotSessionId', '==', normalizedSessionId),
+    limit(1),
+  ));
+  if (duplicate.docs.some((item) => item.id !== batchId)) throw new Error('This IoT session is already linked to another batch.');
+
+  const batchRef = doc(db, 'copra_batches', batchId);
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(batchRef);
+    if (!snapshot.exists()) throw new Error('This batch no longer exists.');
+    const data = snapshot.data();
+    if (data.createdBy !== farmerUid) throw new Error('You can only link an IoT session to your own batch.');
+    if (data.batchStatus !== 'active') throw new Error('Only an active batch can be linked to an IoT session.');
+    if (typeof data.iotSessionId === 'string' && data.iotSessionId.trim()) {
+      throw new Error(data.iotSessionId === normalizedSessionId
+        ? 'This IoT session is already linked to the batch.'
+        : 'This batch is already linked to a different IoT session. Existing links cannot be overwritten.');
+    }
+    transaction.update(batchRef, { iotSessionId: normalizedSessionId });
+  });
+}
+
 export async function markAlertReadRecord(alertId: string, _uid: string) {
   await updateDoc(doc(db, 'alert_records', alertId), { isRead: true, readAt: serverTimestamp() });
 }
@@ -172,6 +201,7 @@ function parseBatch(item: QueryDocumentSnapshot<DocumentData>): CopraBatchRecord
     createdBy: data.createdBy,
     batchDate,
     batchStatus: data.batchStatus,
+    iotSessionId: typeof data.iotSessionId === 'string' && data.iotSessionId.trim() ? data.iotSessionId.trim() : undefined,
     completedAt: completedAt ?? undefined,
     completedBy: typeof data.completedBy === 'string' ? data.completedBy : undefined,
   };

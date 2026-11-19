@@ -18,6 +18,7 @@ import {
   completeBatchRecord,
   createBatchRecord,
   createDeliveryRecord,
+  linkBatchToIotSessionRecord,
   markAlertReadRecord,
   subscribeAlerts,
   subscribeBatches,
@@ -42,6 +43,7 @@ export type Batch = {
   lifecycle: BatchStatus;
   completedAt?: string;
   weightKg?: number;
+  iotSessionId?: string;
   elapsed: string;
   remaining: string;
 };
@@ -92,6 +94,7 @@ type SystemData = {
   warehouses: WarehouseOption[];
   createBatch: (value: NewBatch) => Promise<void>;
   completeBatch: (batchId: string) => Promise<void>;
+  linkBatchToIotSession: (batchId: string, sessionId: string) => Promise<void>;
   createDelivery: (value: NewDelivery) => Promise<string>;
   updateDeliveryStatus: (id: string, status: DeliveryStatus) => Promise<void>;
   markAlertRead: (id: string) => Promise<void>;
@@ -159,18 +162,22 @@ export function SystemDataProvider({ children }: { children: ReactNode }) {
   const batches = useMemo<Batch[]>(() => rawBatches.map((item) => {
     const monitoring = latestMonitoring.get(item.batchId);
     const weight = latestWeights.get(item.batchId);
+    const usesIotMonitoring = Boolean(item.iotSessionId);
     return {
       id: item.batchId,
       displayCode: item.batchNumber ? formatSequenceLabel('Batch', item.batchNumber) : item.displayCode ?? item.batchId,
       createdAt: item.batchDate.toDate().toISOString(),
       startedAt: item.batchDate.toDate().toISOString(),
       method: 'Unspecified',
-      status: monitoring?.dryingStatus ?? undefined,
+      // Legacy Firestore monitoring results are not valid IoT computations.
+      // Keep these fields unavailable until the IoT drying rules are validated.
+      status: usesIotMonitoring ? undefined : monitoring?.dryingStatus ?? undefined,
       lifecycle: item.batchStatus,
       completedAt: item.completedAt?.toDate().toISOString(),
       weightKg: weight?.weight,
-      elapsed: monitoring ? formatDuration(Math.max(0, Math.round((monitoring.recordedAt.toMillis() - item.batchDate.toMillis()) / 60000))) : 'Unavailable',
-      remaining: item.batchStatus === 'completed' ? 'Completed' : monitoring?.estimatedTimeRemaining == null ? 'Unavailable' : formatDuration(monitoring.estimatedTimeRemaining),
+      iotSessionId: item.iotSessionId,
+      elapsed: usesIotMonitoring ? 'UNAVAILABLE' : monitoring ? formatDuration(Math.max(0, Math.round((monitoring.recordedAt.toMillis() - item.batchDate.toMillis()) / 60000))) : 'Unavailable',
+      remaining: usesIotMonitoring ? 'UNAVAILABLE' : item.batchStatus === 'completed' ? 'Completed' : monitoring?.estimatedTimeRemaining == null ? 'Unavailable' : formatDuration(monitoring.estimatedTimeRemaining),
     };
   }), [latestMonitoring, latestWeights, rawBatches]);
 
@@ -213,6 +220,10 @@ export function SystemDataProvider({ children }: { children: ReactNode }) {
     completeBatch: async (batchId) => {
       requireFarmer(account);
       await completeBatchRecord(batchId, account.uid);
+    },
+    linkBatchToIotSession: async (batchId, sessionId) => {
+      requireFarmer(account);
+      await linkBatchToIotSessionRecord(batchId, sessionId, account.uid);
     },
     createDelivery: async (input) => {
       requireFarmer(account);

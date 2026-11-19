@@ -7,29 +7,35 @@ import Header from '@/components/copra/Header';
 import { Card, commonStyles, DataStateNotice, EmptyState, formatAppDate, palette, SectionTitle, StatusPill, TemperatureDisplay } from '@/components/copra/ScopeUI';
 import { Reading, useSystemData } from '@/components/copra/systemData';
 import { READING_FRESHNESS_MINUTES } from '@/config/monitoring';
+import { useIotSessionData } from '@/hooks/use-iot-session-data';
 
 const batchFilters = ['All', 'Active', 'Completed'] as const;
 
 export default function Monitoring() {
   const params = useLocalSearchParams<{ batchId?: string }>();
-  const { batches, readings, loading, error } = useSystemData();
+  const { batches, loading, error } = useSystemData();
   const batchId = params.batchId && batches.some((item) => item.id === params.batchId) ? params.batchId : batches.find((item) => item.lifecycle === 'active')?.id ?? batches[0]?.id;
   const [pickerOpen, setPickerOpen] = useState(false);
   const [batchSearch, setBatchSearch] = useState('');
   const [batchFilter, setBatchFilter] = useState<(typeof batchFilters)[number]>('All');
   const [currentTime, setCurrentTime] = useState(() => Date.now());
   const batch = batches.find((item) => item.id === batchId);
+  const { readings: iotReadings, session: iotSession, validation: iotValidation, loading: iotLoading, error: iotError } = useIotSessionData(batch?.iotSessionId, 200);
   const selectableBatches = useMemo(() => [...batches]
     .filter((item) => batchFilter === 'All' || (batchFilter === 'Active' ? item.lifecycle === 'active' : item.lifecycle === 'completed'))
     .filter((item) => `${item.displayCode} ${item.id} ${formatAppDate(item.startedAt, false)}`.toLowerCase().includes(batchSearch.trim().toLowerCase()))
     .sort((left, right) => Number(right.lifecycle === 'active') - Number(left.lifecycle === 'active') || new Date(right.startedAt).getTime() - new Date(left.startedAt).getTime()), [batchFilter, batchSearch, batches]);
-  const history = useMemo(() => readings.filter((item) => item.batchId === batchId).slice().sort((a, b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime()), [batchId, readings]);
+  const history = useMemo<Reading[]>(() => iotReadings.map((item) => ({ id: item.id, batchId: batchId ?? '', temperature: item.temperatureC, recordedAt: item.timestamp })), [batchId, iotReadings]);
   const latest = history.at(-1);
   const latestTime = latest?.recordedAt ? new Date(latest.recordedAt) : null;
   const validTimestamp = latestTime && !Number.isNaN(latestTime.getTime());
   const ageMinutes = validTimestamp ? (currentTime - latestTime.getTime()) / 60000 : null;
-  const isRecent = ageMinutes !== null && ageMinutes >= 0 && ageMinutes <= READING_FRESHNESS_MINUTES;
-  const isOutdated = ageMinutes !== null && ageMinutes > READING_FRESHNESS_MINUTES;
+  const sessionFinished = Boolean(iotSession?.finishTime) || iotSession?.status?.toUpperCase() === 'COMPLETED';
+  const timestampInFuture = ageMinutes !== null && ageMinutes < 0;
+  const isRecent = batch?.lifecycle === 'active' && !sessionFinished && ageMinutes !== null && ageMinutes >= 0 && ageMinutes <= READING_FRESHNESS_MINUTES;
+  const isOutdated = batch?.lifecycle === 'active' && !sessionFinished && ageMinutes !== null && ageMinutes > READING_FRESHNESS_MINUTES;
+  const emptyTitle = !batch?.iotSessionId ? 'IoT session not linked' : iotError ? 'IoT session unavailable' : iotValidation.invalidTimestampCount ? 'Invalid IoT timestamps' : 'Waiting for IoT readings';
+  const emptyMessage = !batch?.iotSessionId ? 'Open Batch Details and explicitly link the session created by the physical IoT device.' : iotError ? iotError.message : iotValidation.invalidTimestampCount ? `${iotValidation.invalidTimestampCount} temperature reading${iotValidation.invalidTimestampCount === 1 ? '' : 's'} were rejected because the source timestamps are not valid calendar dates. Check the IoT device clock.` : 'The linked session has not uploaded a valid temperature reading yet.';
 
   useEffect(() => {
     const refresh = setInterval(() => setCurrentTime(Date.now()), 60_000);
@@ -37,9 +43,9 @@ export default function Monitoring() {
   }, []);
 
   return <View style={commonStyles.screen}>
-    <SafeAreaView edges={['top']} style={styles.safe}><Header title="Monitoring" subtitle="Computation-based drying status" profileRoute="/(farmer)/profile" /></SafeAreaView>
+    <SafeAreaView edges={['top']} style={styles.safe}><Header title="Monitoring" subtitle="IoT temperature monitoring" profileRoute="/(farmer)/profile" /></SafeAreaView>
     <ScrollView contentContainerStyle={commonStyles.content} showsVerticalScrollIndicator={false}>
-      <DataStateNotice loading={loading} error={error} />
+      <DataStateNotice loading={loading || iotLoading} error={error || iotError?.message || null} />
       <TouchableOpacity style={styles.selector} activeOpacity={0.78} onPress={() => setPickerOpen(true)} accessibilityRole="button" accessibilityLabel="Select drying batch">
         <View style={styles.selectorCopy}><View style={styles.selectorLabelRow}><Text style={styles.selectorLabel}>DRYING BATCH</Text>{batch ? <Text style={styles.lifecycle}>{batch.lifecycle === 'active' ? 'ACTIVE' : 'PREVIOUS'}</Text> : null}</View><Text numberOfLines={1} style={styles.selectorValue}>{batch?.displayCode ?? 'Choose a batch'}</Text></View>
         <Ionicons name="chevron-down" size={19} color={palette.muted} />
@@ -47,12 +53,15 @@ export default function Monitoring() {
 
       {!batch ? <EmptyState icon="radio-outline" title="Waiting for sensor data" message="No readings have been received. Create a batch when you are ready to connect the ESP32 monitoring device." /> : <>
         {batch.lifecycle === 'completed' ? <View style={styles.completedNotice}><Ionicons name="checkmark-circle-outline" size={19} color={palette.green} /><View style={{ flex: 1 }}><Text style={styles.completedTitle}>Completed batch</Text><Text style={styles.completedText}>Showing historical monitoring records. This is not live monitoring.</Text></View></View> : null}
+        {batch.lifecycle === 'active' && sessionFinished ? <View style={styles.completedNotice}><Ionicons name="time-outline" size={19} color={palette.green} /><View style={{ flex: 1 }}><Text style={styles.completedTitle}>IoT session finished</Text><Text style={styles.completedText}>The linked device session reports completion. Its readings are historical and the batch remains manually controlled.</Text></View></View> : null}
+        {iotValidation.invalidTimestampCount ? <View style={styles.stale}><Ionicons name="warning-outline" size={19} color={palette.warning} /><View style={{ flex: 1 }}><Text style={styles.staleTitle}>Invalid source timestamps</Text><Text style={styles.staleText}>{iotValidation.invalidTimestampCount} reading{iotValidation.invalidTimestampCount === 1 ? ' was' : 's were'} excluded because the IoT timestamps are not valid calendar dates.</Text></View></View> : null}
+        {batch.lifecycle === 'active' && timestampInFuture ? <View style={styles.stale}><Ionicons name="time-outline" size={19} color={palette.warning} /><View style={{ flex: 1 }}><Text style={styles.staleTitle}>Check device time</Text><Text style={styles.staleText}>The latest IoT timestamp is ahead of this device clock and is not treated as recent.</Text></View></View> : null}
         {batch.lifecycle === 'active' && isOutdated ? <View style={styles.stale}><Ionicons name="warning-outline" size={19} color={palette.warning} /><View style={{ flex: 1 }}><Text style={styles.staleTitle}>Reading may be outdated</Text><Text style={styles.staleText}>Sensor values may no longer reflect current conditions.</Text></View></View> : null}
-        {!latest ? <Card style={styles.sensorEmpty}><View style={styles.sensorEmptyIcon}><Ionicons name="radio-outline" size={24} color={palette.green} /></View><Text style={styles.sensorEmptyTitle}>Waiting for sensor data</Text><Text style={styles.sensorEmptyText}>No readings have been received for this batch. The ESP32 monitoring device may not be connected yet.</Text><View style={styles.unavailableGrid}><View style={styles.unavailableItem}><Text style={styles.summaryLabel}>Drying status</Text><Text style={styles.unavailableValue}>Unavailable</Text></View><View style={styles.unavailableItem}><Text style={styles.summaryLabel}>Estimated remaining</Text><Text style={styles.unavailableValue}>Unavailable</Text></View></View></Card> : <Card style={styles.monitorCard}>
-          <View style={styles.top}><View style={{ flex: 1, minWidth: 0 }}><Text style={styles.eyebrow}>{batch.lifecycle === 'active' ? 'LATEST TEMPERATURE' : 'LATEST RECORDED TEMPERATURE'}</Text><TemperatureDisplay value={latest.temperature} size="monitoring" /></View>{batch.status ? <StatusPill value={batch.status} prominent /> : null}</View>
+        {!latest ? <Card style={styles.sensorEmpty}><View style={styles.sensorEmptyIcon}><Ionicons name="radio-outline" size={24} color={palette.green} /></View><Text style={styles.sensorEmptyTitle}>{emptyTitle}</Text><Text style={styles.sensorEmptyText}>{emptyMessage}</Text><View style={styles.unavailableGrid}><View style={styles.unavailableItem}><Text style={styles.summaryLabel}>Drying status</Text><Text style={styles.unavailableValue}>UNAVAILABLE</Text></View><View style={styles.unavailableItem}><Text style={styles.summaryLabel}>Estimated remaining</Text><Text style={styles.unavailableValue}>UNAVAILABLE</Text></View></View></Card> : <Card style={styles.monitorCard}>
+          <View style={styles.top}><View style={{ flex: 1, minWidth: 0 }}><Text style={styles.eyebrow}>{batch.lifecycle === 'active' && !sessionFinished ? 'LATEST TEMPERATURE' : 'LATEST RECORDED TEMPERATURE'}</Text><TemperatureDisplay value={latest.temperature} size="monitoring" /></View><StatusPill value={batch.status} prominent /></View>
           <View style={styles.divider} />
           <View style={styles.summaryGrid}><View style={styles.summaryItem}><Text style={styles.summaryLabel}>Elapsed</Text><Text style={styles.summaryValue}>{batch.elapsed}</Text></View><View style={styles.summaryItem}><Text style={styles.summaryLabel}>{batch.lifecycle === 'active' ? 'Estimated remaining' : 'Completed'}</Text><Text style={styles.summaryValue}>{batch.lifecycle === 'active' ? batch.remaining : batch.completedAt ? formatAppDate(batch.completedAt) : 'Completion time unavailable'}</Text></View></View>
-          <View style={styles.freshnessRow}><View style={[styles.freshnessDot, { backgroundColor: batch.lifecycle === 'active' && isRecent ? palette.green : palette.muted }]} /><Text style={styles.receivedText}>{batch.lifecycle === 'active' ? 'Last received' : 'Last recorded'}: {validTimestamp ? formatAppDate(latest.recordedAt) : 'Timestamp unavailable'}</Text></View>
+          <View style={styles.freshnessRow}><View style={[styles.freshnessDot, { backgroundColor: isRecent ? palette.green : palette.muted }]} /><Text style={styles.receivedText}>{batch.lifecycle === 'active' && !sessionFinished ? 'Last received' : 'Last recorded'}: {validTimestamp ? formatAppDate(latest.recordedAt) : 'Timestamp unavailable'}</Text></View>
         </Card>}
         <SectionTitle title="Temperature history" />
         {history.length ? <Card><TemperatureLineChart readings={history} /></Card> : <Card style={styles.chartEmpty}><Ionicons name="analytics-outline" size={22} color={palette.muted} /><Text style={styles.chartEmptyText}>No temperature readings available</Text></Card>}
