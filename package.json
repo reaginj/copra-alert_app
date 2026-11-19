@@ -9,6 +9,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
+    "test:iot-auto-batch": "node --test tests/iot-auto-batch.test.mjs",
     "firestore:reset": "node ./scripts/firestore-reset.mjs",
     "test:rules": "firebase emulators:exec --only firestore \"node --test tests/firestore.rules.test.mjs\""
   },

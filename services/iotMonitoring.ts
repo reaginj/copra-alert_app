@@ -1,6 +1,9 @@
 import {
   get,
+  limitToFirst,
   limitToLast,
+  onChildAdded,
+  onChildChanged,
   onValue,
   orderByChild,
   orderByKey,
@@ -9,6 +12,8 @@ import {
   type DataSnapshot,
 } from 'firebase/database';
 import { iotDb } from '@/config/firebase';
+import { createIotSessionEventTracker } from '@/services/iotAutoBatch';
+import { normalizeIotTimestamp } from '@/services/iotDataValidation';
 
 const DEFAULT_HISTORY_LIMIT = 200;
 const MAX_HISTORY_LIMIT = 500;
@@ -56,6 +61,17 @@ export interface IoTSessionCandidate {
   validReadingCount: number;
 }
 
+export interface IoTDetectedNewSession {
+  candidate: IoTSessionCandidate;
+  session: IoTCookingSession | null;
+  detectedAt: string;
+}
+
+export interface IoTNewSessionDetector {
+  ready: Promise<number>;
+  unsubscribe: () => void;
+}
+
 export type IoTSubscriptionErrorHandler = (error: IoTMonitoringError) => void;
 
 export class IoTMonitoringError extends Error {
@@ -93,6 +109,38 @@ export async function getTemperatureHistory(
   }
 }
 
+export async function getFirstTemperatureReading(sessionId: string): Promise<IoTTemperatureReading | null> {
+  const safeSessionId = validateSessionId(sessionId);
+  try {
+    const snapshot = await get(query(
+      ref(iotDb, `temperature_history/${safeSessionId}`),
+      orderByChild('timestamp'),
+      limitToFirst(MAX_HISTORY_LIMIT),
+    ));
+    return parseTemperatureHistorySnapshot(snapshot, safeSessionId).readings.at(0) ?? null;
+  } catch (error) {
+    throw normalizeFirebaseError(error, `Unable to retrieve the first temperature reading for ${safeSessionId}.`);
+  }
+}
+
+export function subscribeToFirstTemperatureReading(
+  sessionId: string,
+  onReading: (reading: IoTTemperatureReading | null) => void,
+  onError?: IoTSubscriptionErrorHandler,
+) {
+  const safeSessionId = validateSessionId(sessionId);
+  const firstReadingQuery = query(
+    ref(iotDb, `temperature_history/${safeSessionId}`),
+    orderByChild('timestamp'),
+    limitToFirst(MAX_HISTORY_LIMIT),
+  );
+  return onValue(
+    firstReadingQuery,
+    (snapshot) => onReading(parseTemperatureHistorySnapshot(snapshot, safeSessionId).readings.at(0) ?? null),
+    (error) => onError?.(normalizeFirebaseError(error, `First temperature reading subscription failed for ${safeSessionId}.`)),
+  );
+}
+
 export async function discoverIotSessions(limit = DEFAULT_SESSION_DISCOVERY_LIMIT): Promise<IoTSessionCandidate[]> {
   const sessionLimit = normalizeSessionDiscoveryLimit(limit);
   try {
@@ -112,6 +160,58 @@ export async function discoverIotSessions(limit = DEFAULT_SESSION_DISCOVERY_LIMI
   } catch (error) {
     throw normalizeFirebaseError(error, 'Unable to discover IoT cooking sessions.');
   }
+}
+
+export function detectNewIotSessions(
+  onSession: (event: IoTDetectedNewSession) => void,
+  onError?: IoTSubscriptionErrorHandler,
+): IoTNewSessionDetector {
+  const historyRef = ref(iotDb, 'temperature_history');
+  let disposed = false;
+  let unsubscribeAdded: () => void = () => {};
+  let unsubscribeChanged: () => void = () => {};
+
+  const ready = get(historyRef).then((baselineSnapshot) => {
+    const baselineIds: string[] = [];
+    baselineSnapshot.forEach((sessionSnapshot) => {
+      if (sessionSnapshot.key) baselineIds.push(sessionSnapshot.key);
+    });
+    if (disposed) return baselineIds.length;
+
+    const tracker = createIotSessionEventTracker(baselineIds);
+    const inspect = async (sessionSnapshot: DataSnapshot) => {
+      const sessionId = sessionSnapshot.key;
+      if (disposed || !sessionId || !tracker.isNewSession(sessionId)) return;
+      const candidate = parseSessionCandidate(sessionSnapshot);
+      if (!candidate) return;
+      try {
+        const session = await getCookingSession(sessionId);
+        if (disposed) return;
+        const signature = `${candidate.latestReadingAt}:${candidate.validReadingCount}:${session?.status ?? ''}:${session?.finishTime ?? ''}`;
+        if (!tracker.shouldEmit(sessionId, signature)) return;
+        onSession({ candidate, session, detectedAt: new Date().toISOString() });
+      } catch (cause) {
+        onError?.(cause instanceof IoTMonitoringError ? cause : normalizeFirebaseError(cause, `Unable to inspect IoT session ${sessionId}.`));
+      }
+    };
+    const listenerError = (cause: Error) => onError?.(normalizeFirebaseError(cause, 'New IoT session detection failed.'));
+    unsubscribeAdded = onChildAdded(historyRef, (snapshot) => { void inspect(snapshot); }, listenerError);
+    unsubscribeChanged = onChildChanged(historyRef, (snapshot) => { void inspect(snapshot); }, listenerError);
+    return baselineIds.length;
+  }).catch((cause) => {
+    const error = normalizeFirebaseError(cause, 'Unable to establish the IoT session baseline.');
+    onError?.(error);
+    throw error;
+  });
+
+  return {
+    ready,
+    unsubscribe: () => {
+      disposed = true;
+      unsubscribeAdded();
+      unsubscribeChanged();
+    },
+  };
 }
 
 export function subscribeToCookingSession(
@@ -212,7 +312,7 @@ function parseTemperatureReading(value: unknown, sessionId: string, readingId: s
   const temperatureValue = firstPresent(value, ['temperature_c', 'temperatureC', 'temperature', 'temp_c', 'tempC']);
   const timestampValue = firstPresent(value, ['timestamp', 'recorded_at', 'recordedAt', 'time']);
   const temperatureC = finiteNumber(temperatureValue);
-  const timestamp = validTimestamp(timestampValue);
+  const timestamp = normalizeIotTimestamp(timestampValue);
 
   // Timestamp parsing is intentionally restricted to timestamp aliases. A
   // temperature value is never considered as a timestamp fallback.
@@ -265,7 +365,7 @@ function optionalNonNegativeInteger<K extends string>(value: Record<string, unkn
 }
 
 function optionalTimestamp<K extends string>(value: Record<string, unknown>, key: K, aliases: string[]) {
-  const parsed = validTimestamp(firstPresent(value, aliases));
+  const parsed = normalizeIotTimestamp(firstPresent(value, aliases));
   return parsed === null ? {} : { [key]: parsed } as Record<K, string>;
 }
 
@@ -287,31 +387,6 @@ function finiteNumber(value: unknown) {
   if (typeof value !== 'string' || !value.trim()) return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
-}
-
-function validTimestamp(value: unknown) {
-  if (typeof value !== 'string' && typeof value !== 'number') return null;
-
-  let milliseconds: number;
-  if (typeof value === 'number') milliseconds = value < 10_000_000_000 ? value * 1000 : value;
-  else if (/^\d+(?:\.\d+)?$/.test(value.trim())) {
-    const numeric = Number(value);
-    milliseconds = numeric < 10_000_000_000 ? numeric * 1000 : numeric;
-  } else {
-    const dateParts = value.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,3})?)?)?/);
-    if (dateParts) {
-      const [, yearText, monthText, dayText, hourText = '0', minuteText = '0', secondText = '0'] = dateParts;
-      const year = Number(yearText); const month = Number(monthText); const day = Number(dayText);
-      const hour = Number(hourText); const minute = Number(minuteText); const second = Number(secondText);
-      const daysInMonth = month >= 1 && month <= 12 ? new Date(Date.UTC(year, month, 0)).getUTCDate() : 0;
-      if (day < 1 || day > daysInMonth || hour > 23 || minute > 59 || second > 59) return null;
-    } else if (/^\d{4}-/.test(value)) return null;
-    milliseconds = Date.parse(value);
-  }
-
-  if (!Number.isFinite(milliseconds) || milliseconds <= 0 || milliseconds >= Date.UTC(2101, 0, 1)) return null;
-  const date = new Date(milliseconds);
-  return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
 function normalizeHistoryLimit(value?: number) {
