@@ -42,6 +42,21 @@ service cloud.firestore {
       return /databases/$(database)/documents/sequence_counters/$(counterId);
     }
 
+    function validIotSessionId(value) {
+      return value is string && value.matches('^[A-Za-z0-9_-]{1,100}$');
+    }
+
+    function iotSessionLinkPath(sessionId) {
+      return /databases/$(database)/documents/iot_session_links/$(sessionId);
+    }
+
+    function validIotLinkAfter(sessionId, batchId, ownerUid) {
+      return existsAfter(iotSessionLinkPath(sessionId))
+             && getAfter(iotSessionLinkPath(sessionId)).data.sessionId == sessionId
+             && getAfter(iotSessionLinkPath(sessionId)).data.batchId == batchId
+             && getAfter(iotSessionLinkPath(sessionId)).data.ownerUid == ownerUid;
+    }
+
     match /users/{uid} {
       allow get: if signedIn() && (request.auth.uid == uid || (isFarmer() && resource.data.role == 'warehouse'));
       allow list: if isFarmer() && resource.data.role == 'warehouse';
@@ -65,6 +80,17 @@ service cloud.firestore {
                       (request.resource.data.keys().hasOnly(['batchId', 'batchNumber', 'createdBy', 'batchDate', 'batchStatus'])
                         && request.resource.data.batchNumber is int
                         && request.resource.data.batchNumber > 0
+                        && existsAfter(sequenceCounterPath('batches'))
+                        && getAfter(sequenceCounterPath('batches')).data.currentValue == request.resource.data.batchNumber
+                        && getAfter(sequenceCounterPath('batches')).data.lastRecordId == batchId
+                        && getAfter(sequenceCounterPath('batches')).data.updatedBy == request.auth.uid)
+                      ||
+                      (request.resource.data.keys().hasOnly(['batchId', 'batchNumber', 'createdBy', 'batchDate', 'batchStatus', 'iotSessionId'])
+                        && request.resource.data.batchNumber is int
+                        && request.resource.data.batchNumber > 0
+                        && validIotSessionId(request.resource.data.iotSessionId)
+                        && batchId == 'IOT_' + request.resource.data.iotSessionId
+                        && validIotLinkAfter(request.resource.data.iotSessionId, batchId, request.auth.uid)
                         && existsAfter(sequenceCounterPath('batches'))
                         && getAfter(sequenceCounterPath('batches')).data.currentValue == request.resource.data.batchNumber
                         && getAfter(sequenceCounterPath('batches')).data.lastRecordId == batchId
@@ -96,11 +122,28 @@ service cloud.firestore {
                         && !resource.data.keys().hasAny(['iotSessionId'])
                         && request.resource.data.diff(resource.data).addedKeys().hasAll(['iotSessionId'])
                         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['iotSessionId'])
-                        && request.resource.data.iotSessionId is string
-                        && request.resource.data.iotSessionId.matches('^[A-Za-z0-9_-]{1,100}$')
+                        && validIotSessionId(request.resource.data.iotSessionId)
+                        && validIotLinkAfter(request.resource.data.iotSessionId, batchId, request.auth.uid)
                       )
                     );
       allow delete: if false;
+    }
+
+    match /iot_session_links/{sessionId} {
+      allow get: if isFarmer();
+      allow list: if false;
+      allow create: if isFarmer()
+                    && validIotSessionId(sessionId)
+                    && request.resource.data.keys().hasOnly(['sessionId', 'batchId', 'ownerUid', 'createdAt'])
+                    && request.resource.data.sessionId == sessionId
+                    && request.resource.data.batchId is string
+                    && request.resource.data.ownerUid == request.auth.uid
+                    && request.resource.data.createdAt is timestamp
+                    && request.resource.data.createdAt == request.time
+                    && existsAfter(/databases/$(database)/documents/copra_batches/$(request.resource.data.batchId))
+                    && getAfter(/databases/$(database)/documents/copra_batches/$(request.resource.data.batchId)).data.createdBy == request.auth.uid
+                    && getAfter(/databases/$(database)/documents/copra_batches/$(request.resource.data.batchId)).data.iotSessionId == sessionId;
+      allow update, delete: if false;
     }
 
     match /monitoring_records/{monitoringId} {

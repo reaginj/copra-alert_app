@@ -109,6 +109,73 @@ test('concurrent batch creation allocates unique sequential numbers', async () =
   assert.equal(counter.data().currentValue, 2);
 });
 
+test('automatic IoT batch creation atomically creates a deterministic mapping', async () => {
+  const db = environment.authenticatedContext('farmer-1').firestore();
+  const result = await createSequentialIotBatch(db, 'farmer-1', 'session-alpha');
+  assert.deepEqual(result, { batchId: 'IOT_session-alpha', batchNumber: 1, created: true });
+
+  const batch = await getDoc(doc(db, 'copra_batches', result.batchId));
+  const link = await getDoc(doc(db, 'iot_session_links', 'session-alpha'));
+  assert.equal(batch.data().iotSessionId, 'session-alpha');
+  assert.equal(batch.data().createdBy, 'farmer-1');
+  assert.equal(link.data().batchId, result.batchId);
+  assert.equal(link.data().ownerUid, 'farmer-1');
+});
+
+test('duplicate and concurrent IoT events create one batch and increment the counter once', async () => {
+  const db1 = environment.authenticatedContext('farmer-1').firestore();
+  const db2 = environment.authenticatedContext('farmer-1').firestore();
+  const results = await Promise.all([
+    createSequentialIotBatch(db1, 'farmer-1', 'session-repeat'),
+    createSequentialIotBatch(db2, 'farmer-1', 'session-repeat'),
+  ]);
+  assert.equal(results[0].batchId, 'IOT_session-repeat');
+  assert.equal(results[1].batchId, 'IOT_session-repeat');
+  assert.deepEqual(results.map((item) => item.batchNumber), [1, 1]);
+
+  const replay = await createSequentialIotBatch(db1, 'farmer-1', 'session-repeat');
+  assert.equal(replay.created, false);
+  assert.equal(replay.batchNumber, 1);
+  const counter = await getDoc(doc(db1, 'sequence_counters', 'batches'));
+  assert.equal(counter.data().currentValue, 1);
+});
+
+test('different concurrent IoT sessions preserve sequential counter integrity', async () => {
+  const db1 = environment.authenticatedContext('farmer-1').firestore();
+  const db2 = environment.authenticatedContext('farmer-1').firestore();
+  const results = await Promise.all([
+    createSequentialIotBatch(db1, 'farmer-1', 'session-one'),
+    createSequentialIotBatch(db2, 'farmer-1', 'session-two'),
+  ]);
+  assert.deepEqual(results.map((item) => item.batchNumber).sort((a, b) => a - b), [1, 2]);
+  const counter = await getDoc(doc(db1, 'sequence_counters', 'batches'));
+  assert.equal(counter.data().currentValue, 2);
+});
+
+test('invalid IoT session IDs and unauthorized automatic creation are denied', async () => {
+  const farmer = environment.authenticatedContext('farmer-1').firestore();
+  const warehouse = environment.authenticatedContext('warehouse-1').firestore();
+  await assertFails(createSequentialIotBatch(warehouse, 'warehouse-1', 'session-warehouse'));
+
+  const invalid = writeBatch(farmer);
+  invalid.set(doc(farmer, 'copra_batches', 'IOT_bad.session'), { batchId: 'IOT_bad.session', batchNumber: 1, createdBy: 'farmer-1', batchDate: Timestamp.now(), batchStatus: 'active', iotSessionId: 'bad.session' });
+  invalid.set(doc(farmer, 'iot_session_links', 'bad.session'), { sessionId: 'bad.session', batchId: 'IOT_bad.session', ownerUid: 'farmer-1', createdAt: serverTimestamp() });
+  invalid.set(doc(farmer, 'sequence_counters', 'batches'), { kind: 'batch', currentValue: 1, lastRecordId: 'IOT_bad.session', updatedBy: 'farmer-1', updatedAt: serverTimestamp() });
+  await assertFails(invalid.commit());
+});
+
+test('manual IoT linking creates the same immutable uniqueness reservation', async () => {
+  const db = environment.authenticatedContext('farmer-1').firestore();
+  const linking = writeBatch(db);
+  linking.update(doc(db, 'copra_batches', 'BATCH-1'), { iotSessionId: 'manual-session' });
+  linking.set(doc(db, 'iot_session_links', 'manual-session'), { sessionId: 'manual-session', batchId: 'BATCH-1', ownerUid: 'farmer-1', createdAt: serverTimestamp() });
+  await assertSucceeds(linking.commit());
+
+  const link = await getDoc(doc(db, 'iot_session_links', 'manual-session'));
+  assert.equal(link.data().batchId, 'BATCH-1');
+  await assertFails(updateDoc(doc(db, 'iot_session_links', 'manual-session'), { batchId: 'CHANGED' }));
+});
+
 test('batch and delivery sequences are separate and cannot be forged', async () => {
   const db = environment.authenticatedContext('farmer-1').firestore();
   assert.equal(await createSequentialBatch(db, 'BATCH-SEQ-ONLY'), 1);
@@ -218,6 +285,32 @@ async function createSequentialBatch(db, batchId) {
     transaction.set(doc(db, 'copra_batches', batchId), { batchId, batchNumber: next, createdBy: 'farmer-1', batchDate: Timestamp.now(), batchStatus: 'active' });
     transaction.set(counterRef, { kind: 'batch', currentValue: next, lastRecordId: batchId, updatedBy: 'farmer-1', updatedAt: serverTimestamp() });
     return next;
+  });
+}
+
+async function createSequentialIotBatch(db, farmerUid, sessionId) {
+  const batchId = `IOT_${sessionId}`;
+  const batchDate = Timestamp.now();
+  return runTransaction(db, async (transaction) => {
+    const batchRef = doc(db, 'copra_batches', batchId);
+    const linkRef = doc(db, 'iot_session_links', sessionId);
+    const counterRef = doc(db, 'sequence_counters', 'batches');
+    const batch = await transaction.get(batchRef);
+    const link = await transaction.get(linkRef);
+    const counter = await transaction.get(counterRef);
+
+    if (batch.exists() || link.exists()) {
+      if (!batch.exists() || !link.exists()) throw new Error('Incomplete mapping');
+      if (batch.data().createdBy !== farmerUid || batch.data().iotSessionId !== sessionId
+        || link.data().batchId !== batchId || link.data().ownerUid !== farmerUid) throw new Error('Mapping conflict');
+      return { batchId, batchNumber: batch.data().batchNumber, created: false };
+    }
+
+    const batchNumber = (counter.data()?.currentValue ?? 0) + 1;
+    transaction.set(batchRef, { batchId, batchNumber, createdBy: farmerUid, batchDate, batchStatus: 'active', iotSessionId: sessionId });
+    transaction.set(linkRef, { sessionId, batchId, ownerUid: farmerUid, createdAt: serverTimestamp() });
+    transaction.set(counterRef, { kind: 'batch', currentValue: batchNumber, lastRecordId: batchId, updatedBy: farmerUid, updatedAt: serverTimestamp() });
+    return { batchId, batchNumber, created: true };
   });
 }
 

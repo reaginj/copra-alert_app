@@ -84,7 +84,9 @@ type NewDelivery = { warehouseUserId: string; deliveryDate: Date };
 
 type SystemData = {
   dataSource: 'firestore';
+  accountUid: string | null;
   role: UserRole | null;
+  batchesLoaded: boolean;
   loading: boolean;
   error: string | null;
   batches: Batch[];
@@ -110,6 +112,7 @@ export function SystemDataProvider({ children }: { children: ReactNode }) {
   const [rawAlerts, setRawAlerts] = useState<AlertRecord[]>([]);
   const [rawDeliveries, setRawDeliveries] = useState<DeliveryRecord[]>([]);
   const [warehouses, setWarehouses] = useState<WarehouseOption[]>([]);
+  const [batchesLoaded, setBatchesLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -118,7 +121,7 @@ export function SystemDataProvider({ children }: { children: ReactNode }) {
     let dataUnsubscribes: (() => void)[] = [];
     let subscribedKey = '';
     const clearDataSubscriptions = () => { dataUnsubscribes.forEach((unsubscribe) => unsubscribe()); dataUnsubscribes = []; };
-    const clearRecords = () => { setRawBatches([]); setRawMonitoring([]); setRawWeights([]); setRawAlerts([]); setRawDeliveries([]); setWarehouses([]); };
+    const clearRecords = () => { setRawBatches([]); setRawMonitoring([]); setRawWeights([]); setRawAlerts([]); setRawDeliveries([]); setWarehouses([]); setBatchesLoaded(false); };
     const fail = (cause: Error) => { setError(cause.message || 'Unable to load Firestore data.'); setLoading(false); };
 
     const authUnsubscribe = onAuthStateChanged(auth, (user) => {
@@ -135,7 +138,7 @@ export function SystemDataProvider({ children }: { children: ReactNode }) {
           let pending = 6;
           const ready = <T,>(setter: (records: T[]) => void) => (records: T[]) => { setter(records); pending -= 1; if (pending === 0) setLoading(false); };
           dataUnsubscribes = [
-            subscribeBatches(profile.uid, ready(setRawBatches), fail),
+            subscribeBatches(profile.uid, (records) => { setBatchesLoaded(true); ready(setRawBatches)(records); }, fail),
             subscribeMonitoring(ready(setRawMonitoring), fail),
             subscribeWeights(ready(setRawWeights), fail),
             subscribeAlerts(ready(setRawAlerts), fail),
@@ -211,7 +214,7 @@ export function SystemDataProvider({ children }: { children: ReactNode }) {
   }), [account, batchDisplayCodes, latestMonitoring, rawDeliveries, warehouseNames, weightsByDelivery]);
 
   const value = useMemo<SystemData>(() => ({
-    dataSource: 'firestore', role: account?.role ?? null, loading, error, batches, readings, alerts, deliveries, warehouses,
+    dataSource: 'firestore', accountUid: account?.uid ?? null, role: account?.role ?? null, batchesLoaded, loading, error, batches, readings, alerts, deliveries, warehouses,
     createBatch: async (input) => {
       requireFarmer(account);
       if (Number.isNaN(input.startedAt.getTime()) || input.startedAt.getTime() > Date.now()) throw new Error('Select a valid start date that is not in the future.');
@@ -239,7 +242,7 @@ export function SystemDataProvider({ children }: { children: ReactNode }) {
       requireFarmer(account);
       await markAlertReadRecord(id, account.uid);
     },
-  }), [account, alerts, batches, deliveries, error, loading, readings, warehouses]);
+  }), [account, alerts, batches, batchesLoaded, deliveries, error, loading, readings, warehouses]);
 
   return <Context.Provider value={value}>{children}</Context.Provider>;
 }

@@ -17,7 +17,9 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 import * as Crypto from 'expo-crypto';
+import { IOT_AUTO_BATCH_WRITES_ENABLED } from '@/config/iotAutoBatch';
 import { db } from '@/config/firebase';
+import { getDeterministicIotBatchId, isValidIotSessionId } from '@/services/iotAutoBatch';
 import type {
   AlertRecord,
   CopraBatchRecord,
@@ -102,6 +104,61 @@ export async function createBatchRecord(input: { farmerUid: string; batchDate: D
   return { batchId, batchNumber };
 }
 
+export async function createIotLinkedBatchRecord(input: { farmerUid: string; sessionId: string; batchDate: Date }) {
+  if (!IOT_AUTO_BATCH_WRITES_ENABLED) throw new Error('Automatic IoT batch creation is disabled.');
+  const normalizedSessionId = input.sessionId.trim();
+  if (!isValidIotSessionId(normalizedSessionId)) throw new Error('A valid IoT session ID is required.');
+  if (Number.isNaN(input.batchDate.getTime())) throw new Error('A valid IoT cooking start time is required.');
+
+  const batchId = getDeterministicIotBatchId(normalizedSessionId);
+  const existingAssociation = await getDocs(query(
+    collection(db, 'copra_batches'),
+    where('iotSessionId', '==', normalizedSessionId),
+    limit(1),
+  ));
+  if (existingAssociation.docs.some((item) => item.id !== batchId)) {
+    throw new Error('This IoT session is already linked to an existing batch.');
+  }
+  const batchRef = doc(db, 'copra_batches', batchId);
+  const linkRef = doc(db, 'iot_session_links', normalizedSessionId);
+  const counterRef = doc(db, 'sequence_counters', 'batches');
+  return runTransaction(db, async (transaction) => {
+    const batchSnapshot = await transaction.get(batchRef);
+    const linkSnapshot = await transaction.get(linkRef);
+    const counterSnapshot = await transaction.get(counterRef);
+
+    if (batchSnapshot.exists() || linkSnapshot.exists()) {
+      if (!batchSnapshot.exists() || !linkSnapshot.exists()) throw new Error('The IoT session mapping is incomplete. Automatic creation was stopped.');
+      const batch = batchSnapshot.data();
+      const link = linkSnapshot.data();
+      const batchNumber = readPositiveInteger(batch.batchNumber);
+      if (batch.createdBy !== input.farmerUid || batch.iotSessionId !== normalizedSessionId
+        || link.batchId !== batchId || link.sessionId !== normalizedSessionId || link.ownerUid !== input.farmerUid) {
+        throw new Error('This IoT session is already associated with another batch or Farmer.');
+      }
+      return { batchId, batchNumber, created: false };
+    }
+
+    const batchNumber = readCounterValue(counterSnapshot.data()?.currentValue) + 1;
+    transaction.set(batchRef, {
+      batchId,
+      batchNumber,
+      createdBy: input.farmerUid,
+      batchDate: Timestamp.fromDate(input.batchDate),
+      batchStatus: 'active',
+      iotSessionId: normalizedSessionId,
+    });
+    transaction.set(linkRef, {
+      sessionId: normalizedSessionId,
+      batchId,
+      ownerUid: input.farmerUid,
+      createdAt: serverTimestamp(),
+    });
+    transaction.set(counterRef, { kind: 'batch', currentValue: batchNumber, lastRecordId: batchId, updatedBy: input.farmerUid, updatedAt: serverTimestamp() });
+    return { batchId, batchNumber, created: true };
+  });
+}
+
 export async function createDeliveryRecord(input: { farmerUid: string; warehouseUserId: string; deliveryDate: Date }) {
   const deliveryId = makeId('DEL');
   const deliveryRef = doc(db, 'delivery_records', deliveryId);
@@ -144,18 +201,40 @@ export async function completeBatchRecord(batchId: string, farmerUid: string) {
 
 export async function linkBatchToIotSessionRecord(batchId: string, sessionId: string, farmerUid: string) {
   const normalizedSessionId = sessionId.trim();
-  if (!normalizedSessionId || /[.#$\[\]\/]/.test(normalizedSessionId)) throw new Error('Select a valid IoT session.');
+  if (!isValidIotSessionId(normalizedSessionId)) throw new Error('Select a valid IoT session.');
 
-  const duplicate = await getDocs(query(
-    collection(db, 'copra_batches'),
-    where('iotSessionId', '==', normalizedSessionId),
-    limit(1),
-  ));
-  if (duplicate.docs.some((item) => item.id !== batchId)) throw new Error('This IoT session is already linked to another batch.');
+  // Preserve compatibility with the currently deployed rules until the
+  // reservation rules and gated app release are enabled together.
+  if (!IOT_AUTO_BATCH_WRITES_ENABLED) {
+    const duplicate = await getDocs(query(
+      collection(db, 'copra_batches'),
+      where('iotSessionId', '==', normalizedSessionId),
+      limit(1),
+    ));
+    if (duplicate.docs.some((item) => item.id !== batchId)) throw new Error('This IoT session is already linked to another batch.');
+
+    const legacyBatchRef = doc(db, 'copra_batches', batchId);
+    await runTransaction(db, async (transaction) => {
+      const snapshot = await transaction.get(legacyBatchRef);
+      if (!snapshot.exists()) throw new Error('This batch no longer exists.');
+      const data = snapshot.data();
+      if (data.createdBy !== farmerUid) throw new Error('You can only link an IoT session to your own batch.');
+      if (data.batchStatus !== 'active') throw new Error('Only an active batch can be linked to an IoT session.');
+      if (typeof data.iotSessionId === 'string' && data.iotSessionId.trim()) {
+        throw new Error(data.iotSessionId === normalizedSessionId
+          ? 'This IoT session is already linked to the batch.'
+          : 'This batch is already linked to a different IoT session. Existing links cannot be overwritten.');
+      }
+      transaction.update(legacyBatchRef, { iotSessionId: normalizedSessionId });
+    });
+    return;
+  }
 
   const batchRef = doc(db, 'copra_batches', batchId);
+  const linkRef = doc(db, 'iot_session_links', normalizedSessionId);
   await runTransaction(db, async (transaction) => {
     const snapshot = await transaction.get(batchRef);
+    const linkSnapshot = await transaction.get(linkRef);
     if (!snapshot.exists()) throw new Error('This batch no longer exists.');
     const data = snapshot.data();
     if (data.createdBy !== farmerUid) throw new Error('You can only link an IoT session to your own batch.');
@@ -165,6 +244,8 @@ export async function linkBatchToIotSessionRecord(batchId: string, sessionId: st
         ? 'This IoT session is already linked to the batch.'
         : 'This batch is already linked to a different IoT session. Existing links cannot be overwritten.');
     }
+    if (linkSnapshot.exists()) throw new Error('This IoT session is already linked to another batch.');
+    transaction.set(linkRef, { sessionId: normalizedSessionId, batchId, ownerUid: farmerUid, createdAt: serverTimestamp() });
     transaction.update(batchRef, { iotSessionId: normalizedSessionId });
   });
 }
@@ -187,6 +268,11 @@ function makeId(prefix: 'BATCH' | 'WEIGHT' | 'DEL') {
 function readCounterValue(value: unknown) {
   if (value == null) return 0;
   if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) throw new Error('The sequence counter is invalid. Contact an administrator before creating records.');
+  return value;
+}
+
+function readPositiveInteger(value: unknown) {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0) throw new Error('The existing batch number is invalid.');
   return value;
 }
 

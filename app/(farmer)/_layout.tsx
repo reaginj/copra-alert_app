@@ -1,5 +1,7 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
+import { View } from 'react-native';
+import { IotAutoBatchCoordinator } from '@/components/copra/IotAutoBatchCoordinator';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 
 
@@ -9,7 +11,8 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 export default function TabLayout() {
   
   return (
-    <Tabs
+    <View style={{ flex: 1 }}>
+      <Tabs
       screenOptions={{
         tabBarActiveTintColor: '#246B45',
         tabBarInactiveTintColor: '#7D867F',
@@ -60,6 +63,8 @@ export default function TabLayout() {
           href: null,
         }}
       />
-    </Tabs>
+      </Tabs>
+      <IotAutoBatchCoordinator />
+    </View>
   );
 }

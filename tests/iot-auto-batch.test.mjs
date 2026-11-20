@@ -2,8 +2,12 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   calculateIotSessionTiming,
+  canRunReadOnlyIotAutoBatchCoordinator,
+  createReadOnlyIotAutoBatchCoordinator,
   createIotSessionEventTracker,
   formatIotElapsedDuration,
+  getDeterministicIotBatchId,
+  isValidIotSessionId,
   selectIotAutoBatchCandidate,
 } from '../services/iotAutoBatch.ts';
 import { normalizeIotTimestamp } from '../services/iotDataValidation.ts';
@@ -30,6 +34,130 @@ const baseContext = {
 
 test('automatic Firestore writes remain hard-disabled in stage one', () => {
   assert.equal(IOT_AUTO_BATCH_WRITES_ENABLED, false);
+});
+
+test('read-only coordinator requires an authenticated Farmer and loaded batches', () => {
+  const ready = { detectionEnabled: true, farmerUid: 'farmer-1', role: 'farmer', batchesLoaded: true };
+  assert.equal(canRunReadOnlyIotAutoBatchCoordinator(ready), true);
+  assert.equal(canRunReadOnlyIotAutoBatchCoordinator({ ...ready, detectionEnabled: false }), false);
+  assert.equal(canRunReadOnlyIotAutoBatchCoordinator({ ...ready, farmerUid: null }), false);
+  assert.equal(canRunReadOnlyIotAutoBatchCoordinator({ ...ready, role: 'warehouse' }), false);
+  assert.equal(canRunReadOnlyIotAutoBatchCoordinator({ ...ready, batchesLoaded: false }), false);
+});
+
+test('read-only coordinator suppresses history, cleans up, and ignores post-stop events', async () => {
+  const diagnostics = [];
+  let emit;
+  let unsubscribed = 0;
+  const coordinator = createReadOnlyIotAutoBatchCoordinator({
+    source: (onSession) => {
+      emit = onSession;
+      return { ready: Promise.resolve(4), unsubscribe: () => { unsubscribed += 1; } };
+    },
+    getContext: () => baseContext,
+    onDiagnostic: (value) => diagnostics.push(value),
+    now: () => now,
+  });
+  await Promise.resolve();
+  assert.deepEqual(diagnostics.at(-1), { state: 'rejected', reason: 'no-eligible-session' });
+  coordinator.stop();
+  emit?.({ candidate: baseCandidate, session: null });
+  assert.equal(unsubscribed, 1);
+  assert.deepEqual(diagnostics.at(-1), { state: 'rejected', reason: 'no-eligible-session' });
+});
+
+test('read-only coordinator handles detector updates and rejects multiple eligible sessions', async () => {
+  const diagnostics = [];
+  let emit;
+  const coordinator = createReadOnlyIotAutoBatchCoordinator({
+    source: (onSession) => {
+      emit = onSession;
+      return { ready: Promise.resolve(0), unsubscribe: () => {} };
+    },
+    getContext: () => baseContext,
+    onDiagnostic: (value) => diagnostics.push(value),
+    now: () => now,
+  });
+  await Promise.resolve();
+  emit?.({ candidate: baseCandidate, session: null });
+  assert.deepEqual(diagnostics.at(-1), { state: 'eligible', sessionId: 'session-alpha' });
+  emit?.({ candidate: baseCandidate, session: null });
+  assert.deepEqual(diagnostics.at(-1), { state: 'eligible', sessionId: 'session-alpha' });
+  emit?.({ candidate: { ...baseCandidate, id: 'session-beta' }, session: null });
+  assert.deepEqual(diagnostics.at(-1), { state: 'rejected', reason: 'ambiguous-sessions' });
+  coordinator.stop();
+});
+
+test('coordinator invokes automatic creation once for repeated events and concurrent callbacks', async () => {
+  let emit;
+  let resolveCreation;
+  let creationCalls = 0;
+  const diagnostics = [];
+  const coordinator = createReadOnlyIotAutoBatchCoordinator({
+    source: (onSession) => {
+      emit = onSession;
+      return { ready: Promise.resolve(0), unsubscribe: () => {} };
+    },
+    getContext: () => baseContext,
+    onDiagnostic: (value) => diagnostics.push(value),
+    onEligible: () => {
+      creationCalls += 1;
+      return new Promise((resolve) => { resolveCreation = resolve; });
+    },
+    now: () => now,
+  });
+  await Promise.resolve();
+  emit?.({ candidate: baseCandidate, session: null });
+  emit?.({ candidate: { ...baseCandidate, validReadingCount: 3 }, session: null });
+  assert.equal(creationCalls, 1);
+  assert.deepEqual(diagnostics.at(-1), { state: 'eligible', sessionId: 'session-alpha' });
+  resolveCreation?.({ created: true });
+  await Promise.resolve();
+  emit?.({ candidate: { ...baseCandidate, validReadingCount: 4 }, session: null });
+  assert.equal(creationCalls, 1);
+  coordinator.stop();
+});
+
+test('failed automatic creation retries only after the cooldown on a later detector event', async () => {
+  let emit;
+  let currentTime = now;
+  let creationCalls = 0;
+  const coordinator = createReadOnlyIotAutoBatchCoordinator({
+    source: (onSession) => {
+      emit = onSession;
+      return { ready: Promise.resolve(0), unsubscribe: () => {} };
+    },
+    getContext: () => baseContext,
+    onDiagnostic: () => {},
+    onEligible: async () => {
+      creationCalls += 1;
+      if (creationCalls === 1) throw new Error('offline');
+      return { created: false };
+    },
+    retryDelayMs: 1_000,
+    now: () => currentTime,
+  });
+  await Promise.resolve();
+  emit?.({ candidate: baseCandidate, session: null });
+  await Promise.resolve();
+  await Promise.resolve();
+  emit?.({ candidate: { ...baseCandidate, validReadingCount: 3 }, session: null });
+  assert.equal(creationCalls, 1);
+  currentTime += 1_001;
+  emit?.({ candidate: { ...baseCandidate, validReadingCount: 4 }, session: null });
+  await Promise.resolve();
+  assert.equal(creationCalls, 2);
+  coordinator.stop();
+});
+
+test('IoT session mapping is deterministic and rejects unsafe IDs', () => {
+  assert.equal(getDeterministicIotBatchId('session-alpha_001'), 'IOT_session-alpha_001');
+  assert.equal(getDeterministicIotBatchId('session-alpha_001'), getDeterministicIotBatchId('session-alpha_001'));
+  assert.equal(isValidIotSessionId('session-alpha_001'), true);
+  for (const invalid of ['', 'bad.session', 'bad/session', 'bad session', 'x'.repeat(101)]) {
+    assert.equal(isValidIotSessionId(invalid), false);
+    assert.throws(() => getDeterministicIotBatchId(invalid));
+  }
 });
 
 test('invalid IoT calendar timestamps are rejected instead of normalized', () => {

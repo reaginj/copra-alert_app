@@ -10,6 +10,7 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "test:iot-auto-batch": "node --test tests/iot-auto-batch.test.mjs",
+    "audit:iot-session-links": "node scripts/migrate-iot-session-links.mjs",
     "firestore:reset": "node ./scripts/firestore-reset.mjs",
     "test:rules": "firebase emulators:exec --only firestore \"node --test tests/firestore.rules.test.mjs\""
   },
